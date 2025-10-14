@@ -1,0 +1,65 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.5.3'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.stockmate'
+version = '0.0.1-SNAPSHOT'
+description = 'Demo project for Spring Boot'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(17)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencyManagement {
+    imports {
+        // Spring Boot 3.5.x ↔ Spring Cloud 2025.0.x (Northfields) 호환
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:2025.0.0"
+    }
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // JPA
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // Validation
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Spring Security
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // Swagger
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.9'
+
+    // MYSQL
+    implementation 'com.mysql:mysql-connector-j:9.1.0'
+
+    // H2
+    //runtimeOnly 'com.h2database:h2'
+
+    // Config Client
+    implementation 'org.springframework.cloud:spring-cloud-starter-config'
+
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}

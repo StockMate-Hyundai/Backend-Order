@@ -1,0 +1,56 @@
+name: PR Assignee & 전체 Collaborators 리뷰 요청
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: read         # repos.listCollaborators 호출용
+  issues: write          # 이슈(Assignee) 추가용
+  pull-requests: write   # 리뷰어 요청용
+
+jobs:
+  assign-and-request:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assign 및 리뷰어 일괄 요청
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.payload.pull_request.number;
+            const prAuthor = context.payload.pull_request.user.login;
+
+            // 1) Assignee 지정 (PR 연 사람을 지정)
+            await github.rest.issues.addAssignees({
+              owner,
+              repo,
+              issue_number: prNumber,
+              assignees: [prAuthor]
+            });
+
+            // 2) 리포지토리 Collaborators 전체 조회
+            const collaborators = await github.paginate(
+              github.rest.repos.listCollaborators,
+              { owner, repo, affiliation: 'all' }
+            );
+            const allLogins = collaborators.map(u => u.login);
+
+            // 3) PR 작성자만 제외
+            const reviewers = allLogins.filter(login => login !== prAuthor);
+            if (reviewers.length === 0) {
+              core.info('등록할 리뷰어가 없습니다.');
+              return;
+            }
+
+            // 4) 최대 15명씩 나눠서 리뷰 요청 (API 제한)
+            const chunkSize = 15;
+            for (let i = 0; i < reviewers.length; i += chunkSize) {
+              const chunk = reviewers.slice(i, i + chunkSize);
+              await github.rest.pulls.requestReviewers({
+                owner,
+                repo,
+                pull_number: prNumber,
+                reviewers: chunk
+              });
+            }
