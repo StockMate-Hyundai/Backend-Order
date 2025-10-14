@@ -1,4 +1,4 @@
-package com.stockmate.order.api.controller;
+package com.stockmate.order.api.health.controller;
 
 import com.stockmate.order.common.response.ApiResponse;
 import com.stockmate.order.common.response.SuccessStatus;
