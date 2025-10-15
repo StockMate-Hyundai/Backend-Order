@@ -24,7 +24,7 @@ public class Order extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long orderId;
 
-    @Column(name = "order_number", unique = true, nullable = false)
+    @Column(name = "order_number", unique = true)
     private String orderNumber;
 
     @Column(name = "member_id", nullable = false)
@@ -44,5 +44,13 @@ public class Order extends BaseTimeEntity {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();
+
+    @PrePersist
+    public void generateOrderNumber() {
+        if (this.orderNumber == null) {
+            // 임시값으로 설정 (저장 후 orderId가 생성되면 실제 주문번호로 업데이트)
+            this.orderNumber = "TEMP-" + System.currentTimeMillis();
+        }
+    }
 
 }

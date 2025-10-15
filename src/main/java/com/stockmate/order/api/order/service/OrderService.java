@@ -23,7 +23,7 @@ public class OrderService {
 
     @Transactional
     public void makeOrder(OrderRequestDTO orderRequestDTO, Long memberId) {
-        log.info("부품 발주 시작 - Member ID: {}, 주문 항목 수: {}", 
+        log.info("부품 발주 시작 - Member ID: {}, 주문 항목 수: {}",
                 memberId, orderRequestDTO.getOrderItems().size());
 
         List<OrderItemCheckRequestDTO> checkItems = new ArrayList<>();
@@ -36,7 +36,7 @@ public class OrderService {
 
         // 부품 재고 체크
         InventoryCheckResponseDTO checkResult = inventoryService.checkInventory(checkItems);
-        
+
         log.info("재고 체크 완료 - 총 금액: {}", checkResult.getTotalAmount());
 
         // 주문 생성
@@ -59,22 +59,22 @@ public class OrderService {
                     .partId(itemRequest.getPartId())
                     .amount(itemRequest.getAmount())
                     .build();
-            
+
             order.getOrderItems().add(orderItem);
         }
 
         Order savedOrder = orderRepository.save(order);
 
-        // 주문번호 생성 및 업데이트
+        // 주문번호 생성 및 업데이트 (TEMP-xxx -> SMO-xxx)
         String orderNumber = "SMO-" + savedOrder.getOrderId();
         Order updatedOrder = savedOrder.toBuilder()
                 .orderNumber(orderNumber)
                 .build();
         orderRepository.save(updatedOrder);
 
-        log.info("부품 발주 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}", 
-                savedOrder.getOrderId(), orderNumber, savedOrder.getMemberId(), 
-                savedOrder.getOrderItems().size(), checkResult.getTotalAmount(), 
+        log.info("부품 발주 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}",
+                savedOrder.getOrderId(), orderNumber, savedOrder.getMemberId(),
+                savedOrder.getOrderItems().size(), checkResult.getTotalAmount(),
                 savedOrder.getOrderStatus());
 
         // TODO: 추후 결제 서버에 totalAmount 전송
