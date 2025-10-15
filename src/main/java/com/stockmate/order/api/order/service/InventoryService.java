@@ -66,12 +66,8 @@ public class InventoryService {
                     log.warn("부품 주문 불가능 - Part ID: {}, 요청 수량: {}, 현재 재고: {}", 
                             item.getPartId(), item.getRequestedAmount(), item.getAvailableStock());
                     
-                    // 에러 응답용 DTO 생성 (totalPrice 제외)
-                    InventoryCheckResponseDTO errorData = InventoryCheckResponseDTO.builder()
-                            .orderList(checkResults)
-                            .totalPrice(0)
-                            .build();
-                    throw new BadRequestException(ErrorStatus.SOLD_OUT_PARTS_EXCEPTION.getMessage(), errorData);
+                    // 에러 응답용 DTO 생성
+                    throw new BadRequestException(ErrorStatus.SOLD_OUT_PARTS_EXCEPTION.getMessage(), data);
                 }
             }
 
