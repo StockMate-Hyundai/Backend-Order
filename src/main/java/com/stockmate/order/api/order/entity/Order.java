@@ -10,6 +10,8 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "orders")
@@ -26,10 +28,6 @@ public class Order extends BaseTimeEntity {
     @Column(name = "member_id", nullable = false)
     private Long memberId;
 
-    @Column(name = "part_id", nullable = false)
-    private Long partId;
-
-    private int amount; // 주문수량
     private String etc; // 주문 추가 설명
     private String rejectedMessage; // 반려 메세지
     private String carrier; // 택배 회사 이름
@@ -40,5 +38,9 @@ public class Order extends BaseTimeEntity {
 
     @Enumerated(EnumType.STRING)
     private OrderStatus orderStatus;
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<OrderItem> orderItems = new ArrayList<>();
 
 }

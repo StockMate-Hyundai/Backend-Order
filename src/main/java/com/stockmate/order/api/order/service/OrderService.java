@@ -1,13 +1,17 @@
 package com.stockmate.order.api.order.service;
 
-import com.stockmate.order.api.order.dto.OrderRequestDTO;
+import com.stockmate.order.api.order.dto.*;
 import com.stockmate.order.api.order.entity.Order;
+import com.stockmate.order.api.order.entity.OrderItem;
 import com.stockmate.order.api.order.entity.OrderStatus;
 import com.stockmate.order.api.order.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -19,30 +23,54 @@ public class OrderService {
 
     @Transactional
     public void makeOrder(OrderRequestDTO orderRequestDTO, Long memberId) {
-        log.info("부품 발주 시작 - Member ID: {}, Part ID: {}, Amount: {}", 
-                memberId, orderRequestDTO.getPartsId(), orderRequestDTO.getAmount());
+        log.info("부품 발주 시작 - Member ID: {}, 주문 항목 수: {}", 
+                memberId, orderRequestDTO.getOrderItems().size());
+
+        List<OrderItemCheckRequestDTO> checkItems = new ArrayList<>();
+        for (OrderItemRequestDTO item : orderRequestDTO.getOrderItems()) {
+            checkItems.add(OrderItemCheckRequestDTO.builder()
+                    .partId(item.getPartId())
+                    .amount(item.getAmount())
+                    .build());
+        }
 
         // 부품 재고 체크
-        inventoryService.checkInventory(orderRequestDTO.getPartsId(), orderRequestDTO.getAmount());
+        InventoryCheckResponseDTO checkResult = inventoryService.checkInventory(checkItems);
+        
+        log.info("재고 체크 완료 - 총 금액: {}", checkResult.getTotalAmount());
 
         // 주문 생성
         Order order = Order.builder()
                 .memberId(memberId)
-                .partId(orderRequestDTO.getPartsId())
-                .amount(orderRequestDTO.getAmount())
                 .etc(orderRequestDTO.getEtc())
-                .orderStatus(OrderStatus.ORDER_COMPLETED)
                 .requestedShippingDate(orderRequestDTO.getRequestedShippingDate())
+                .orderStatus(OrderStatus.ORDER_COMPLETED)
                 .rejectedMessage(null)
                 .carrier(null)
                 .trackingNumber(null)
                 .shippingDate(null)
+                .orderItems(new ArrayList<>())
                 .build();
+
+        // 주문 항목들 생성 및 추가
+        for (OrderItemRequestDTO itemRequest : orderRequestDTO.getOrderItems()) {
+            OrderItem orderItem = OrderItem.builder()
+                    .order(order)
+                    .partId(itemRequest.getPartId())
+                    .amount(itemRequest.getAmount())
+                    .build();
+            
+            order.getOrderItems().add(orderItem);
+        }
 
         Order savedOrder = orderRepository.save(order);
 
-        log.info("부품 발주 완료 - Order ID: {}, Member ID: {}, Part ID: {}, Amount: {}, Status: {}", 
-                savedOrder.getOrderId(), savedOrder.getMemberId(), savedOrder.getPartId(), 
-                savedOrder.getAmount(), savedOrder.getOrderStatus());
+        log.info("부품 발주 완료 - Order ID: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}", 
+                savedOrder.getOrderId(), savedOrder.getMemberId(), 
+                savedOrder.getOrderItems().size(), checkResult.getTotalAmount(), 
+                savedOrder.getOrderStatus());
+
+        // TODO: 추후 결제 서버에 totalAmount 전송
+        // paymentService.processPayment(checkResult.getTotalAmount(), savedOrder.getOrderId());
     }
 }

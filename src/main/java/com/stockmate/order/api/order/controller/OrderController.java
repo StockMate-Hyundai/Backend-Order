@@ -22,12 +22,15 @@ public class OrderController {
 
     private final OrderService orderService;
 
-    @Operation(summary = "주문 생성 API", description = "본사에 있는 부품을 발주합니다.")
+    @Operation(summary = "주문 생성 API", description = "본사에 있는 부품들을 발주합니다.")
     @PostMapping
     public ResponseEntity<ApiResponse<Void>> makeOrder(@RequestBody OrderRequestDTO orderRequestDTO, @AuthenticationPrincipal SecurityUser securityUser) {
-        log.info("부품 발주 요청 - 요청 가맹점 ID: {}, Parts ID: {}, 수량 : {}", securityUser.getMemberId(), orderRequestDTO.getPartsId(), orderRequestDTO.getAmount());
+        log.info("부품 발주 요청 - 요청 가맹점 ID: {}, 주문 항목 수: {}", 
+                securityUser.getMemberId(), orderRequestDTO.getOrderItems().size());
 
         orderService.makeOrder(orderRequestDTO, securityUser.getMemberId());
         return ApiResponse.success_only(SuccessStatus.SEND_PARTS_ORDER_SUCCESS);
     }
+
+
 }

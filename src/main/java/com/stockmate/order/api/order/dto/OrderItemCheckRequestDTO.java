@@ -5,16 +5,11 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
-import java.util.List;
-
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class OrderRequestDTO {
-
-    private List<OrderItemRequestDTO> orderItems;
-    private LocalDate requestedShippingDate;
-    private String etc;
+public class OrderItemCheckRequestDTO {
+    private Long partId;
+    private int amount;
 }
