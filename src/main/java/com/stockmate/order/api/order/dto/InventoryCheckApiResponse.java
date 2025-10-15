@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
@@ -13,5 +15,6 @@ public class InventoryCheckApiResponse {
     private int status;
     private boolean success;
     private String message;
-    private InventoryCheckResponseDTO data;
+    private List<InventoryCheckItemResponseDTO> data;
+    private int totalAmount;
 }

@@ -49,27 +49,38 @@ public class InventoryService {
                 throw new InternalServerException(ErrorStatus.RESPONSE_DATA_NOT_MATCH_EXCEPTION.getMessage());
             }
 
-            InventoryCheckResponseDTO data = response.getData();
-            if (data == null || data.getData() == null) {
-                log.error("부품 재고 체크 데이터가 null");
+            List<InventoryCheckItemResponseDTO> checkResults = response.getData();
+            if (checkResults == null || checkResults.isEmpty()) {
+                log.error("부품 재고 체크 데이터가 null 또는 비어있음");
                 throw new InternalServerException(ErrorStatus.RESPONSE_DATA_NULL_EXCEPTION.getMessage());
             }
 
-            log.info("부품 재고 체크 완료 - 총 금액: {}, 체크 항목 수: {}", 
-                    data.getTotalAmount(), data.getData().size());
+            int totalAmount = response.getTotalAmount();
+
+            log.info("부품 재고 체크 완료 - 체크 항목 수: {}, 총 금액: {}", checkResults.size(), totalAmount);
 
             // 주문 불가능한 부품이 있는지 확인
-            List<InventoryCheckItemResponseDTO> checkResults = data.getData();
             for (InventoryCheckItemResponseDTO item : checkResults) {
                 if (!item.isCanOrder()) {
                     log.warn("부품 주문 불가능 - Part ID: {}, 요청 수량: {}, 현재 재고: {}", 
                             item.getPartId(), item.getRequestedAmount(), item.getAvailableStock());
-                    throw new BadRequestException(ErrorStatus.SOLD_OUT_PARTS_EXCEPTION.getMessage(), data);
+                    
+                    // 에러 응답용 DTO 생성 (totalAmount 제외)
+                    InventoryCheckResponseDTO errorData = InventoryCheckResponseDTO.builder()
+                            .data(checkResults)
+                            .totalAmount(0)
+                            .build();
+                    throw new BadRequestException(ErrorStatus.SOLD_OUT_PARTS_EXCEPTION.getMessage(), errorData);
                 }
             }
 
             log.info("모든 부품 주문 가능 확인 완료");
-            return data;
+            
+            // 성공 응답용 DTO 생성
+            return InventoryCheckResponseDTO.builder()
+                    .data(checkResults)
+                    .totalAmount(totalAmount)
+                    .build();
 
         } catch (BadRequestException e) {
             throw e;
