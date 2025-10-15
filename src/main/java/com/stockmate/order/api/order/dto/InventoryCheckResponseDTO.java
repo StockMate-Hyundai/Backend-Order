@@ -13,5 +13,5 @@ import java.util.List;
 @Builder
 public class InventoryCheckResponseDTO {
     private List<InventoryCheckItemResponseDTO> data;
-    private int totalAmount;
+    private int totalPrice;
 }

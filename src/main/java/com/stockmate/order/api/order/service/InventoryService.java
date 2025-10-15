@@ -55,9 +55,9 @@ public class InventoryService {
                 throw new InternalServerException(ErrorStatus.RESPONSE_DATA_NULL_EXCEPTION.getMessage());
             }
 
-            int totalAmount = response.getTotalAmount();
+            int totalPrice = response.getTotalPrice();
 
-            log.info("부품 재고 체크 완료 - 체크 항목 수: {}, 총 금액: {}", checkResults.size(), totalAmount);
+            log.info("부품 재고 체크 완료 - 체크 항목 수: {}, 총 금액: {}", checkResults.size(), totalPrice);
 
             // 주문 불가능한 부품이 있는지 확인
             for (InventoryCheckItemResponseDTO item : checkResults) {
@@ -65,10 +65,10 @@ public class InventoryService {
                     log.warn("부품 주문 불가능 - Part ID: {}, 요청 수량: {}, 현재 재고: {}", 
                             item.getPartId(), item.getRequestedAmount(), item.getAvailableStock());
                     
-                    // 에러 응답용 DTO 생성 (totalAmount 제외)
+                    // 에러 응답용 DTO 생성 (totalPrice 제외)
                     InventoryCheckResponseDTO errorData = InventoryCheckResponseDTO.builder()
                             .data(checkResults)
-                            .totalAmount(0)
+                            .totalPrice(0)
                             .build();
                     throw new BadRequestException(ErrorStatus.SOLD_OUT_PARTS_EXCEPTION.getMessage(), errorData);
                 }
@@ -79,7 +79,7 @@ public class InventoryService {
             // 성공 응답용 DTO 생성
             return InventoryCheckResponseDTO.builder()
                     .data(checkResults)
-                    .totalAmount(totalAmount)
+                    .totalPrice(totalPrice)
                     .build();
 
         } catch (BadRequestException e) {
