@@ -8,10 +8,11 @@ import lombok.RequiredArgsConstructor;
 public enum OrderStatus {
 
     ORDER_COMPLETED("ORDER_COMPLETED"), // 주문 완료
-    PAYMENT_COMPLETED("PAYMENT_COMPLETED"), // 결제 완료
+    PENDING_SHIPPING("PENDING_SHIPPING"), // 출고 대기
     SHIPPING("SHIPPING"), // 배송중
-    REJECTED("REJECTED"), // 반려됨
-    DELIVERED("DELIVERED"); // 배송 완료
+    REJECTED("REJECTED"), // 출고 반려
+    DELIVERED("DELIVERED"), // 배송 완료
+    RECEIVED("RECEIVED"); // 입고 완료
 
     private final String key;
 }

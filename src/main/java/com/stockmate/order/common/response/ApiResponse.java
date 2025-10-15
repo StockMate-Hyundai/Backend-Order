@@ -49,4 +49,13 @@ public class ApiResponse<T> {
                 .message(message)
                 .build();
     }
+
+    public static <T> ApiResponse<T> fail_with_data(int status, String message, T data) {
+        return ApiResponse.<T>builder()
+                .status(status)
+                .success(false)
+                .message(message)
+                .data(data)
+                .build();
+    }
 }
