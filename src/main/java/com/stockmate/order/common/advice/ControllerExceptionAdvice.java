@@ -33,6 +33,12 @@ public class ControllerExceptionAdvice {
             //slackNotificationService.sendServerErrorMessage(ex.getMessage());
         }
 
+        // 데이터가 있는 경우 데이터를 포함한 응답 반환
+        if (ex.getData() != null) {
+            return ResponseEntity.status(ex.getStatusCode())
+                    .body(ApiResponse.fail_with_data(ex.getStatusCode(), ex.getResponseMessage(), ex.getData()));
+        }
+
         return ResponseEntity.status(ex.getStatusCode())
                 .body(ApiResponse.fail(ex.getStatusCode(), ex.getResponseMessage()));
     }

@@ -15,6 +15,7 @@ public enum ErrorStatus {
     VALIDATION_REQUEST_MISSING_EXCEPTION(HttpStatus.BAD_REQUEST, "요청 값이 입력되지 않았습니다."),
     USER_ALREADY_EXISTS_EXCEPTION(HttpStatus.BAD_REQUEST,"이미 존재하는 사용자입니다."),
     INVALID_ROLE_EXCEPTION(HttpStatus.BAD_REQUEST,"해당 요청을 수행할 권한이 없습니다."),
+    SOLD_OUT_PARTS_EXCEPTION(HttpStatus.BAD_REQUEST,"부품 재고가 부족합니다."),
 
     /**
      * 401 UNAUTHORIZED
