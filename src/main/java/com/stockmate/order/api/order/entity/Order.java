@@ -9,7 +9,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,12 +17,15 @@ import java.util.List;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
-@Builder
+@Builder(toBuilder = true)
 public class Order extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long orderId;
+
+    @Column(name = "order_number", unique = true)
+    private String orderNumber;
 
     @Column(name = "member_id", nullable = false)
     private Long memberId;
@@ -42,5 +44,13 @@ public class Order extends BaseTimeEntity {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();
+
+    @PrePersist
+    public void generateOrderNumber() {
+        if (this.orderNumber == null) {
+            // 임시값으로 설정 (저장 후 orderId가 생성되면 실제 주문번호로 업데이트)
+            this.orderNumber = "TEMP-" + System.currentTimeMillis();
+        }
+    }
 
 }
