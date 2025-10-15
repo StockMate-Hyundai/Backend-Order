@@ -65,8 +65,15 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        log.info("부품 발주 완료 - Order ID: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}", 
-                savedOrder.getOrderId(), savedOrder.getMemberId(), 
+        // 주문번호 생성 및 업데이트
+        String orderNumber = "SMO-" + savedOrder.getOrderId();
+        Order updatedOrder = savedOrder.toBuilder()
+                .orderNumber(orderNumber)
+                .build();
+        orderRepository.save(updatedOrder);
+
+        log.info("부품 발주 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}", 
+                savedOrder.getOrderId(), orderNumber, savedOrder.getMemberId(), 
                 savedOrder.getOrderItems().size(), checkResult.getTotalAmount(), 
                 savedOrder.getOrderStatus());
 
