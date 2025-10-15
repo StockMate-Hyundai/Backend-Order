@@ -12,6 +12,6 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class InventoryCheckResponseDTO {
-    private List<InventoryCheckItemResponseDTO> data;
+    private List<InventoryCheckItemResponseDTO> orderList;
     private int totalPrice;
 }

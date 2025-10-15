@@ -49,13 +49,14 @@ public class InventoryService {
                 throw new InternalServerException(ErrorStatus.RESPONSE_DATA_NOT_MATCH_EXCEPTION.getMessage());
             }
 
-            List<InventoryCheckItemResponseDTO> checkResults = response.getData();
-            if (checkResults == null || checkResults.isEmpty()) {
+            InventoryCheckResponseDTO data = response.getData();
+            if (data == null || data.getOrderList() == null || data.getOrderList().isEmpty()) {
                 log.error("부품 재고 체크 데이터가 null 또는 비어있음");
                 throw new InternalServerException(ErrorStatus.RESPONSE_DATA_NULL_EXCEPTION.getMessage());
             }
 
-            int totalPrice = response.getTotalPrice();
+            List<InventoryCheckItemResponseDTO> checkResults = data.getOrderList();
+            int totalPrice = data.getTotalPrice();
 
             log.info("부품 재고 체크 완료 - 체크 항목 수: {}, 총 금액: {}", checkResults.size(), totalPrice);
 
@@ -67,7 +68,7 @@ public class InventoryService {
                     
                     // 에러 응답용 DTO 생성 (totalPrice 제외)
                     InventoryCheckResponseDTO errorData = InventoryCheckResponseDTO.builder()
-                            .data(checkResults)
+                            .orderList(checkResults)
                             .totalPrice(0)
                             .build();
                     throw new BadRequestException(ErrorStatus.SOLD_OUT_PARTS_EXCEPTION.getMessage(), errorData);
@@ -76,11 +77,8 @@ public class InventoryService {
 
             log.info("모든 부품 주문 가능 확인 완료");
             
-            // 성공 응답용 DTO 생성
-            return InventoryCheckResponseDTO.builder()
-                    .data(checkResults)
-                    .totalPrice(totalPrice)
-                    .build();
+            // 성공 응답 반환
+            return data;
 
         } catch (BadRequestException e) {
             throw e;
