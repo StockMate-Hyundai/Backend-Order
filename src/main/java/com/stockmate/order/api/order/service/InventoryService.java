@@ -29,7 +29,7 @@ public class InventoryService {
 
         try {
             InventoryCheckApiResponse response = webClient.post()
-                    .uri(inventoryServerUrl + "/api/v1/store/check")
+                    .uri(inventoryServerUrl + "/api/v1/parts/check")
                     .bodyValue(orderItems)
                     .retrieve()
                     .bodyToMono(InventoryCheckApiResponse.class)
