@@ -37,7 +37,7 @@ public class OrderService {
         // 부품 재고 체크
         InventoryCheckResponseDTO checkResult = inventoryService.checkInventory(checkItems);
 
-        log.info("재고 체크 완료 - 총 금액: {}", checkResult.getTotalAmount());
+        log.info("재고 체크 완료 - 총 금액: {}", checkResult.getTotalPrice());
 
         // 주문 생성
         Order order = Order.builder()
@@ -74,10 +74,10 @@ public class OrderService {
 
         log.info("부품 발주 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}", 
                 finalOrder.getOrderId(), finalOrder.getOrderNumber(), finalOrder.getMemberId(), 
-                finalOrder.getOrderItems().size(), checkResult.getTotalAmount(), 
+                finalOrder.getOrderItems().size(), checkResult.getTotalPrice(), 
                 finalOrder.getOrderStatus());
 
-        // TODO: 추후 결제 서버에 totalAmount 전송
-        // paymentService.processPayment(checkResult.getTotalAmount(), savedOrder.getOrderId());
+        // TODO: 추후 결제 서버에 totalPrice 전송
+        // paymentService.processPayment(checkResult.getTotalPrice(), savedOrder.getOrderId());
     }
 }

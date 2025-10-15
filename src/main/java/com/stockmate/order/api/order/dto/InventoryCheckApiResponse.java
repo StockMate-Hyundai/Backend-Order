@@ -16,5 +16,5 @@ public class InventoryCheckApiResponse {
     private boolean success;
     private String message;
     private List<InventoryCheckItemResponseDTO> data;
-    private int totalAmount;
+    private int totalPrice;
 }
