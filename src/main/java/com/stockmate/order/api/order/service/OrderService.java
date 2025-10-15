@@ -70,12 +70,12 @@ public class OrderService {
         Order updatedOrder = savedOrder.toBuilder()
                 .orderNumber(orderNumber)
                 .build();
-        orderRepository.save(updatedOrder);
+        Order finalOrder = orderRepository.save(updatedOrder);
 
-        log.info("부품 발주 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}",
-                savedOrder.getOrderId(), orderNumber, savedOrder.getMemberId(),
-                savedOrder.getOrderItems().size(), checkResult.getTotalAmount(),
-                savedOrder.getOrderStatus());
+        log.info("부품 발주 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}", 
+                finalOrder.getOrderId(), finalOrder.getOrderNumber(), finalOrder.getMemberId(), 
+                finalOrder.getOrderItems().size(), checkResult.getTotalAmount(), 
+                finalOrder.getOrderStatus());
 
         // TODO: 추후 결제 서버에 totalAmount 전송
         // paymentService.processPayment(checkResult.getTotalAmount(), savedOrder.getOrderId());
