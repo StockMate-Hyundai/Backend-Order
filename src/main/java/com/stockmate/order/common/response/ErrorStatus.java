@@ -34,7 +34,11 @@ public enum ErrorStatus {
      */
     KAFKA_EVENT_EXCEPTION(HttpStatus.INTERNAL_SERVER_ERROR,"서버 내부 오류 발생"),
     NOT_CONNECTTION_PARTS_STOCK_EXCEPTION(HttpStatus.INTERNAL_SERVER_ERROR, "부품 재고 체크 호출에 실패했습니다."),
+    NOT_CONNECTTION_PARTS_DETAIL_EXCEPTION(HttpStatus.INTERNAL_SERVER_ERROR, "부품 상세 정보 조회에 실패했습니다."),
+    NOT_CONNECTTION_USER_DETAIL_EXCEPTION(HttpStatus.INTERNAL_SERVER_ERROR, "사용자 정보 조회에 실패했습니다."),
     CHECK_PARTS_STOCK_EXCEPTION(HttpStatus.INTERNAL_SERVER_ERROR, "부품 재고 체크 중 오류가 발생했습니다."),
+    CHECK_USER_DETAIL_EXCEPTION(HttpStatus.INTERNAL_SERVER_ERROR, "사용자 정보 조회 중 오류가 발생했습니다."),
+    CHECK_PARTS_DETAIL_EXCEPTION(HttpStatus.INTERNAL_SERVER_ERROR, "부품 상세 정보 조회 중 오류가 발생했습니다."),
     RESPONSE_DATA_NOT_MATCH_EXCEPTION(HttpStatus.INTERNAL_SERVER_ERROR,"외부 서버 응답이 올바르지 않습니다."),
     RESPONSE_DATA_NULL_EXCEPTION(HttpStatus.INTERNAL_SERVER_ERROR,"외부 서버 응답 데이터가 없습니다."),
     ;
