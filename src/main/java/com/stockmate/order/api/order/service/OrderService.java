@@ -304,4 +304,75 @@ public class OrderService {
 
         return toOrderDetailResponseDTO(order, userMap, partMap);
     }
+
+    // 사용자용 주문 리스트 조회 (내 주문만)
+    @Transactional(readOnly = true)
+    public OrderListResponseDTO getMyOrderList(MyOrderListRequestDTO requestDTO, Long memberId) {
+        log.info("내 주문 리스트 조회 - Member ID: {}, Status: {}, StartDate: {}, EndDate: {}, Page: {}, Size: {}",
+                memberId, requestDTO.getStatus(), requestDTO.getStartDate(), requestDTO.getEndDate(), 
+                requestDTO.getPage(), requestDTO.getSize());
+
+        // 페이지 사이즈 검증
+        int page = requestDTO.getPage() < 0 ? 0 : requestDTO.getPage();
+        int size = (requestDTO.getSize() <= 0 || requestDTO.getSize() > 200) ? 20 : requestDTO.getSize();
+
+        Pageable pageable = PageRequest.of(page, size);
+
+        // 주문 조회 (memberId 필터 강제 적용)
+        Page<Order> orderPage = orderRepository.findOrdersWithFilters(
+                requestDTO.getStatus(),
+                null,  // partId 필터 없음
+                memberId,  // 본인의 memberId만
+                requestDTO.getStartDate(),
+                requestDTO.getEndDate(),
+                pageable
+        );
+
+        if (orderPage.isEmpty()) {
+            log.info("주문 리스트가 비어있음 - Member ID: {}", memberId);
+            return OrderListResponseDTO.builder()
+                    .totalElements(0)
+                    .totalPages(0)
+                    .page(page)
+                    .size(size)
+                    .isLast(true)
+                    .content(new ArrayList<>())
+                    .build();
+        }
+
+        // 부품 ID 수집
+        Set<Long> partIds = orderPage.getContent().stream()
+                .flatMap(order -> order.getOrderItems().stream())
+                .map(OrderItem::getPartId)
+                .collect(Collectors.toSet());
+
+        log.info("외부 서버 호출 준비 - 부품 수: {}", partIds.size());
+
+        // 사용자 정보 조회 (본인 정보만)
+        Map<Long, UserBatchResponseDTO> userMap = userService.getUsersByMemberIds(List.of(memberId));
+
+        // 부품 정보 일괄 조회
+        Map<Long, PartDetailResponseDTO> partMap = inventoryService.getPartDetails(new ArrayList<>(partIds));
+
+        log.info("외부 서버 호출 완료 - 조회된 부품: {}", partMap.size());
+
+        // 주문 데이터 조합
+        List<OrderDetailResponseDTO> content = orderPage.getContent().stream()
+                .map(order -> toOrderDetailResponseDTO(order, userMap, partMap))
+                .collect(Collectors.toList());
+
+        OrderListResponseDTO response = OrderListResponseDTO.builder()
+                .totalElements(orderPage.getTotalElements())
+                .totalPages(orderPage.getTotalPages())
+                .page(orderPage.getNumber())
+                .size(orderPage.getSize())
+                .isLast(orderPage.isLast())
+                .content(content)
+                .build();
+
+        log.info("내 주문 리스트 조회 완료 - Member ID: {}, 총 주문 수: {}, 현재 페이지 주문 수: {}",
+                memberId, response.getTotalElements(), content.size());
+
+        return response;
+    }
 }

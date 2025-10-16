@@ -1,6 +1,7 @@
 package com.stockmate.order.api.order.controller;
 
 import com.stockmate.order.api.order.dto.*;
+import com.stockmate.order.api.order.entity.OrderStatus;
 import com.stockmate.order.api.order.service.OrderService;
 import com.stockmate.order.common.config.security.SecurityUser;
 import com.stockmate.order.common.response.ApiResponse;
@@ -12,6 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 
 @Tag(name = "Order", description = "주문 관련 API 입니다.")
 @RestController
@@ -65,6 +68,32 @@ public class OrderController {
         log.info("주문 상세 조회 완료 - Order ID: {}, Order Number: {}", orderId, response.getOrderNumber());
         
         return ApiResponse.success(SuccessStatus.SEND_ORDER_DETAIL_SUCCESS, response);
+    }
+
+    @Operation(summary = "내 주문 리스트 조회 API", description = "내가 생성한 주문 리스트를 조회합니다.")
+    @GetMapping("/list/my")
+    public ResponseEntity<ApiResponse<OrderListResponseDTO>> getMyOrderList(
+            @RequestParam(required = false) OrderStatus status,
+            @RequestParam(required = false) LocalDate startDate,
+            @RequestParam(required = false) LocalDate endDate,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal SecurityUser securityUser) {
+        
+        log.info("내 주문 리스트 조회 요청 - Member ID: {}", securityUser.getMemberId());
+
+        MyOrderListRequestDTO requestDTO = MyOrderListRequestDTO.builder()
+                .status(status)
+                .startDate(startDate)
+                .endDate(endDate)
+                .page(page)
+                .size(size)
+                .build();
+
+        OrderListResponseDTO response = orderService.getMyOrderList(requestDTO, securityUser.getMemberId());
+        
+        log.info("내 주문 리스트 조회 완료 - 총 주문 수: {}", response.getTotalElements());
+        return ApiResponse.success(SuccessStatus.SEND_MY_ORDER_LIST_SUCCESS, response);
     }
 
     @Operation(summary = "주문 리스트 조회 API (관리자용)", description = "필터링을 통해 주문 리스트를 조회합니다. (ADMIN/SUPER_ADMIN만 가능)")
