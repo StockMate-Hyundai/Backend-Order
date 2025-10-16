@@ -1,9 +1,11 @@
 package com.stockmate.order.api.order.service;
 
 import com.stockmate.order.api.order.dto.*;
+import com.stockmate.order.api.order.service.fallback.InventoryServiceFallback;
 import com.stockmate.order.common.exception.BadRequestException;
 import com.stockmate.order.common.exception.InternalServerException;
 import com.stockmate.order.common.response.ErrorStatus;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,10 +24,12 @@ import java.util.Map;
 public class InventoryService {
 
     private final WebClient webClient;
+    private final InventoryServiceFallback inventoryServiceFallback;
 
     @Value("${inventory.server.url}")
     private String inventoryServerUrl;
 
+    @CircuitBreaker(name = "partsService", fallbackMethod = "checkInventoryFallback")
     public InventoryCheckResponseDTO checkInventory(List<OrderItemCheckRequestDTO> orderItems) {
         log.info("부품 재고 체크 요청 - 주문 항목 수: {}", orderItems.size());
 
@@ -86,6 +90,7 @@ public class InventoryService {
         }
     }
 
+    @CircuitBreaker(name = "partsService", fallbackMethod = "getPartDetailsFallback")
     public Map<Long, PartDetailResponseDTO> getPartDetails(List<Long> partIds) {
         log.info("부품 상세 정보 일괄 조회 요청 - Part IDs 수: {}", partIds.size());
 
@@ -126,5 +131,14 @@ public class InventoryService {
             log.error("부품 상세 정보 조회 중 예상치 못한 오류 - Error: {}", e.getMessage(), e);
             throw new InternalServerException(ErrorStatus.CHECK_PARTS_DETAIL_EXCEPTION.getMessage());
         }
+    }
+
+    // Circuit Breaker Fallback 메서드들
+    private InventoryCheckResponseDTO checkInventoryFallback(List<OrderItemCheckRequestDTO> orderItems, Exception e) {
+        return inventoryServiceFallback.checkInventoryFallback(orderItems, e);
+    }
+
+    private Map<Long, PartDetailResponseDTO> getPartDetailsFallback(List<Long> partIds, Exception e) {
+        return inventoryServiceFallback.getPartDetailsFallback(partIds, e);
     }
 }
