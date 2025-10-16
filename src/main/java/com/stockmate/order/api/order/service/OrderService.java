@@ -272,4 +272,36 @@ public class OrderService {
                 .updatedAt(order.getUpdatedAt())
                 .build();
     }
+
+    // 주문 상세 조회
+    @Transactional(readOnly = true)
+    public OrderDetailResponseDTO getOrderDetail(Long orderId, Long memberId, Role role) {
+        log.info("주문 상세 조회 - Order ID: {}, 요청자 Member ID: {}, Role: {}", orderId, memberId, role);
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> {
+                    log.error("주문을 찾을 수 없음 - Order ID: {}", orderId);
+                    return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());});
+
+        // 권한 체크: 본인 주문 또는 ADMIN/SUPER_ADMIN
+        boolean isAdmin = role == Role.ADMIN || role == Role.SUPER_ADMIN;
+        if (!isAdmin && !order.getMemberId().equals(memberId)) {
+            log.error("권한 없음 - Order의 Member ID: {}, 요청자 Member ID: {}, Role: {}", order.getMemberId(), memberId, role);
+            throw new BadRequestException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
+        }
+
+        // 사용자 정보 조회
+        List<Long> memberIds = List.of(order.getMemberId());
+        Map<Long, UserBatchResponseDTO> userMap = userService.getUsersByMemberIds(memberIds);
+
+        // 부품 정보 조회
+        List<Long> partIds = order.getOrderItems().stream()
+                .map(OrderItem::getPartId)
+                .collect(Collectors.toList());
+        Map<Long, PartDetailResponseDTO> partMap = inventoryService.getPartDetails(partIds);
+
+        log.info("주문 상세 조회 완료 - Order ID: {}, Order Number: {}", orderId, order.getOrderNumber());
+
+        return toOrderDetailResponseDTO(order, userMap, partMap);
+    }
 }

@@ -53,6 +53,20 @@ public class OrderController {
         return ApiResponse.success_only(SuccessStatus.DELETE_ORDER_SUCCESS);
     }
 
+    @Operation(summary = "주문 상세 조회 API", description = "주문 ID로 주문 상세 정보를 조회합니다. (본인 주문 또는 ADMIN/SUPER_ADMIN)")
+    @GetMapping("/detail")
+    public ResponseEntity<ApiResponse<OrderDetailResponseDTO>> getOrderDetail(@RequestParam Long orderId, @AuthenticationPrincipal SecurityUser securityUser) {
+        
+        log.info("주문 상세 조회 요청 - Order ID: {}, 요청자 ID: {}, 요청자 Role: {}", orderId, securityUser.getMemberId(), securityUser.getRole());
+
+        OrderDetailResponseDTO response = orderService.getOrderDetail(orderId, securityUser.getMemberId(), securityUser.getRole()
+        );
+        
+        log.info("주문 상세 조회 완료 - Order ID: {}, Order Number: {}", orderId, response.getOrderNumber());
+        
+        return ApiResponse.success(SuccessStatus.SEND_ORDER_DETAIL_SUCCESS, response);
+    }
+
     @Operation(summary = "주문 리스트 조회 API (관리자용)", description = "필터링을 통해 주문 리스트를 조회합니다. (ADMIN/SUPER_ADMIN만 가능)")
     @PostMapping("/list")
     public ResponseEntity<ApiResponse<OrderListResponseDTO>> getOrderList(@RequestBody OrderListRequestDTO orderListRequestDTO, @AuthenticationPrincipal SecurityUser securityUser) {
