@@ -30,7 +30,7 @@ public class UserService {
     @Value("${user.server.url}")
     private String userServerUrl;
 
-    @CircuitBreaker(name = "userService", fallbackMethod = "getUsersByMemberIdsFallback")
+    // @CircuitBreaker(name = "userService", fallbackMethod = "getUsersByMemberIdsFallback")
     public Map<Long, UserBatchResponseDTO> getUsersByMemberIds(List<Long> memberIds) {
         log.info("사용자 정보 일괄 조회 요청 - Member IDs 수: {}", memberIds.size());
 
@@ -88,7 +88,7 @@ public class UserService {
     }
 
     // Circuit Breaker Fallback 메서드
-    private Map<Long, UserBatchResponseDTO> getUsersByMemberIdsFallback(List<Long> memberIds, Exception e) {
-        return userServiceFallback.getUsersByMemberIdsFallback(memberIds, e);
-    }
+    // private Map<Long, UserBatchResponseDTO> getUsersByMemberIdsFallback(List<Long> memberIds, Exception e) {
+    //     return userServiceFallback.getUsersByMemberIdsFallback(memberIds, e);
+    // }
 }
