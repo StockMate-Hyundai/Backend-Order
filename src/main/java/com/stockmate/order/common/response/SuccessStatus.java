@@ -16,6 +16,7 @@ public enum SuccessStatus {
     SEND_CANCELLED_ORDER_SUCCESS(HttpStatus.OK, "주문 취소 성공"),
     DELETE_ORDER_SUCCESS(HttpStatus.OK, "주문 삭제 성공"),
     SEND_ORDER_LIST_SUCCESS(HttpStatus.OK, "주문 리스트 조회 성공"),
+    SEND_ORDER_DETAIL_SUCCESS(HttpStatus.OK, "주문 상세 조회 성공"),
 
     /**
      * 201
