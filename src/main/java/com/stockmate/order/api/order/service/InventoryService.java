@@ -29,7 +29,7 @@ public class InventoryService {
     @Value("${inventory.server.url}")
     private String inventoryServerUrl;
 
-    @CircuitBreaker(name = "partsService", fallbackMethod = "checkInventoryFallback")
+    // @CircuitBreaker(name = "partsService", fallbackMethod = "checkInventoryFallback")
     public InventoryCheckResponseDTO checkInventory(List<OrderItemCheckRequestDTO> orderItems) {
         log.info("부품 재고 체크 요청 - 주문 항목 수: {}", orderItems.size());
 
@@ -100,7 +100,7 @@ public class InventoryService {
         }
     }
 
-    @CircuitBreaker(name = "partsService", fallbackMethod = "getPartDetailsFallback")
+    // @CircuitBreaker(name = "partsService", fallbackMethod = "getPartDetailsFallback")
     public Map<Long, PartDetailResponseDTO> getPartDetails(List<Long> partIds) {
         log.info("부품 상세 정보 일괄 조회 요청 - Part IDs 수: {}", partIds.size());
 
@@ -154,11 +154,11 @@ public class InventoryService {
     }
 
     // Circuit Breaker Fallback 메서드들
-    private InventoryCheckResponseDTO checkInventoryFallback(List<OrderItemCheckRequestDTO> orderItems, Exception e) {
-        return inventoryServiceFallback.checkInventoryFallback(orderItems, e);
-    }
+    // private InventoryCheckResponseDTO checkInventoryFallback(List<OrderItemCheckRequestDTO> orderItems, Exception e) {
+    //     return inventoryServiceFallback.checkInventoryFallback(orderItems, e);
+    // }
 
-    private Map<Long, PartDetailResponseDTO> getPartDetailsFallback(List<Long> partIds, Exception e) {
-        return inventoryServiceFallback.getPartDetailsFallback(partIds, e);
-    }
+    // private Map<Long, PartDetailResponseDTO> getPartDetailsFallback(List<Long> partIds, Exception e) {
+    //     return inventoryServiceFallback.getPartDetailsFallback(partIds, e);
+    // }
 }
