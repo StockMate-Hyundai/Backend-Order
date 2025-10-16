@@ -53,4 +53,9 @@ public class Order extends BaseTimeEntity {
         }
     }
 
+    // 주문 취소
+    public void cancel() {
+        this.orderStatus = OrderStatus.CANCELLED;
+    }
+
 }
