@@ -12,7 +12,9 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -81,6 +83,48 @@ public class InventoryService {
         } catch (Exception e) {
             log.error("부품 재고 체크 중 예상치 못한 오류 - Error: {}", e.getMessage(), e);
             throw new InternalServerException(ErrorStatus.CHECK_PARTS_STOCK_EXCEPTION.getMessage());
+        }
+    }
+
+    public Map<Long, PartDetailResponseDTO> getPartDetails(List<Long> partIds) {
+        log.info("부품 상세 정보 일괄 조회 요청 - Part IDs 수: {}", partIds.size());
+
+        try {
+            PartDetailApiResponse response = webClient.post()
+                    .uri(inventoryServerUrl + "/api/v1/parts/detail")
+                    .bodyValue(partIds)
+                    .retrieve()
+                    .bodyToMono(PartDetailApiResponse.class)
+                    .onErrorResume(WebClientResponseException.class, ex -> {
+                        log.error("부품 상세 정보 조회 API 호출 실패 - Status: {}, Response: {}",
+                                ex.getStatusCode(), ex.getResponseBodyAsString());
+                        return Mono.error(new InternalServerException(ErrorStatus.NOT_CONNECTTION_PARTS_DETAIL_EXCEPTION.getMessage()));
+                    })
+                    .onErrorResume(Exception.class, ex -> {
+                        log.error("부품 상세 정보 조회 중 예외 발생 - Error: {}", ex.getMessage(), ex);
+                        return Mono.error(new InternalServerException(ErrorStatus.CHECK_PARTS_DETAIL_EXCEPTION.getMessage()));
+                    })
+                    .block();
+
+            if (response == null || !response.isSuccess() || response.getData() == null) {
+                log.error("부품 상세 정보 조회 응답 실패");
+                throw new InternalServerException(ErrorStatus.RESPONSE_DATA_NOT_MATCH_EXCEPTION.getMessage());
+            }
+
+            // List를 Map으로 변환 (partId를 key로)
+            Map<Long, PartDetailResponseDTO> partMap = new HashMap<>();
+            for (PartDetailResponseDTO part : response.getData()) {
+                partMap.put(part.getId(), part);
+            }
+
+            log.info("부품 상세 정보 일괄 조회 완료 - 조회된 부품 수: {}", partMap.size());
+            return partMap;
+
+        } catch (InternalServerException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("부품 상세 정보 조회 중 예상치 못한 오류 - Error: {}", e.getMessage(), e);
+            throw new InternalServerException(ErrorStatus.CHECK_PARTS_DETAIL_EXCEPTION.getMessage());
         }
     }
 }

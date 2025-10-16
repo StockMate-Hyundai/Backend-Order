@@ -38,6 +38,8 @@ public class Order extends BaseTimeEntity {
     private LocalDate requestedShippingDate; // 원하는 출고 일자
     private LocalDate shippingDate; // 실제 출고 일자
 
+    private int totalPrice; // 총 주문 금액
+
     @Enumerated(EnumType.STRING)
     private OrderStatus orderStatus;
 

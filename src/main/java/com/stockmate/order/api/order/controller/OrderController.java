@@ -1,6 +1,6 @@
 package com.stockmate.order.api.order.controller;
 
-import com.stockmate.order.api.order.dto.OrderRequestDTO;
+import com.stockmate.order.api.order.dto.*;
 import com.stockmate.order.api.order.service.OrderService;
 import com.stockmate.order.common.config.security.SecurityUser;
 import com.stockmate.order.common.response.ApiResponse;
@@ -51,6 +51,17 @@ public class OrderController {
         
         log.info("주문 물리적 삭제 완료 - Order ID: {}", orderId);
         return ApiResponse.success_only(SuccessStatus.DELETE_ORDER_SUCCESS);
+    }
+
+    @Operation(summary = "주문 리스트 조회 API (관리자용)", description = "필터링을 통해 주문 리스트를 조회합니다. (ADMIN/SUPER_ADMIN만 가능)")
+    @PostMapping("/list")
+    public ResponseEntity<ApiResponse<OrderListResponseDTO>> getOrderList(@RequestBody OrderListRequestDTO orderListRequestDTO, @AuthenticationPrincipal SecurityUser securityUser) {
+        
+        log.info("주문 리스트 조회 요청 - 요청자 ID: {}, 요청자 Role: {}", securityUser.getMemberId(), securityUser.getRole());
+        OrderListResponseDTO response = orderService.getOrderList(orderListRequestDTO, securityUser.getRole());
+        
+        log.info("주문 리스트 조회 완료 - 총 주문 수: {}", response.getTotalElements());
+        return ApiResponse.success(SuccessStatus.SEND_ORDER_LIST_SUCCESS, response);
     }
 
 }
