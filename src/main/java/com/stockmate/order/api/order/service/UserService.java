@@ -45,7 +45,14 @@ public class UserService {
                     .retrieve()
                     .bodyToMono(UserBatchApiResponse.class)
                     .onErrorResume(WebClientResponseException.class, ex -> {
-                        log.error("사용자 정보 조회 API 호출 실패 - Status: {}, Response: {}",
+                        // 4xx 에러는 그대로 전달 (비즈니스 예외)
+                        if (ex.getStatusCode().is4xxClientError()) {
+                            log.warn("사용자 정보 조회 클라이언트 에러 - Status: {}, Response: {}", 
+                                    ex.getStatusCode(), ex.getResponseBodyAsString());
+                            return Mono.error(ex);  // 그대로 전달
+                        }
+                        // 5xx 에러만 InternalServerException으로 변환
+                        log.error("사용자 정보 조회 서버 에러 - Status: {}, Response: {}",
                                 ex.getStatusCode(), ex.getResponseBodyAsString());
                         return Mono.error(new InternalServerException(ErrorStatus.NOT_CONNECTTION_USER_DETAIL_EXCEPTION.getMessage()));
                     })
@@ -70,6 +77,9 @@ public class UserService {
             return userMap;
 
         } catch (InternalServerException e) {
+            throw e;
+        } catch (WebClientResponseException e) {
+            // WebClient 예외는 그대로 던져서 Circuit Breaker가 판단하도록
             throw e;
         } catch (Exception e) {
             log.error("사용자 정보 조회 중 예상치 못한 오류 - Error: {}", e.getMessage(), e);
