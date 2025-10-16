@@ -16,6 +16,8 @@ public enum ErrorStatus {
     USER_ALREADY_EXISTS_EXCEPTION(HttpStatus.BAD_REQUEST,"이미 존재하는 사용자입니다."),
     INVALID_ROLE_EXCEPTION(HttpStatus.BAD_REQUEST,"해당 요청을 수행할 권한이 없습니다."),
     SOLD_OUT_PARTS_EXCEPTION(HttpStatus.BAD_REQUEST,"부품 재고가 부족합니다."),
+    ALREADY_CANCELLED_ORDER_EXCEPTION(HttpStatus.BAD_REQUEST,"이미 취소된 주문입니다."),
+    ALREADY_SHIPPED_OR_DELIVERED_ORDER_EXCEPTION(HttpStatus.BAD_REQUEST,"배송 중이거나 완료된 주문은 취소할 수 없습니다."),
 
     /**
      * 401 UNAUTHORIZED
@@ -25,6 +27,7 @@ public enum ErrorStatus {
      * 404 NOT_FOUND
      */
     USER_NOTFOUND_EXCEPTION(HttpStatus.NOT_FOUND,"해당 사용자를 찾을 수 없습니다."),
+    ORDER_NOT_FOUND_EXCEPTION(HttpStatus.NOT_FOUND,"해당 주문을 찾을 수 없습니다."),
 
     /**
      * 500 SERVER_ERROR
