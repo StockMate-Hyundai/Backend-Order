@@ -14,6 +14,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Repository
@@ -34,10 +35,28 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
         QOrder order = QOrder.order;
         QOrderItem orderItem = QOrderItem.orderItem;
 
-        // QueryDSL 쿼리 빌드
-        var query = queryFactory
-                .selectFrom(order)
-                .leftJoin(order.orderItems, orderItem).fetchJoin()
+        // 1단계: 카운트 쿼리 (전체 개수 조회)
+        Long total = queryFactory
+                .select(order.orderId.countDistinct())
+                .from(order)
+                .leftJoin(order.orderItems, orderItem)
+                .where(
+                        statusEq(status),
+                        memberIdEq(memberId),
+                        partIdEq(partId, orderItem),
+                        createdAtBetween(startDate, endDate)
+                )
+                .fetchOne();
+
+        if (total == null || total == 0) {
+            return new PageImpl<>(new ArrayList<>(), pageable, 0);
+        }
+
+        // 2단계: ID만 페이징해서 조회
+        List<Long> orderIds = queryFactory
+                .select(order.orderId)
+                .from(order)
+                .leftJoin(order.orderItems, orderItem)
                 .where(
                         statusEq(status),
                         memberIdEq(memberId),
@@ -45,15 +64,21 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
                         createdAtBetween(startDate, endDate)
                 )
                 .orderBy(order.createdAt.desc())
-                .distinct();
-
-        // 전체 개수 조회
-        long total = query.fetch().size();
-
-        // 페이징 처리
-        List<Order> orders = query
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize())
+                .distinct()
+                .fetch();
+
+        if (orderIds.isEmpty()) {
+            return new PageImpl<>(new ArrayList<>(), pageable, total);
+        }
+
+        // 3단계: ID로 실제 엔티티 + 컬렉션 fetch join
+        List<Order> orders = queryFactory
+                .selectFrom(order)
+                .leftJoin(order.orderItems, orderItem).fetchJoin()
+                .where(order.orderId.in(orderIds))
+                .orderBy(order.createdAt.desc())
                 .fetch();
 
         return new PageImpl<>(orders, pageable, total);
