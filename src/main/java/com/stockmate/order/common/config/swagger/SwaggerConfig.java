@@ -36,9 +36,14 @@ public class SwaggerConfig {
         SecurityRequirement accessTokenRequirement = new SecurityRequirement().addList(accessTokenHeader);
         SecurityRequirement refreshTokenRequirement = new SecurityRequirement().addList(refreshTokenHeader);
 
-        Server server = new Server();
-        //server.setUrl("http://localhost:8001");
-        server.setUrl("https://api.stockmate.site");
+        // 여러 서버 URL 설정
+        Server productionServer = new Server();
+        productionServer.setUrl("https://api.stockmate.site");
+        productionServer.setDescription("운영 서버");
+
+        Server localServer = new Server();
+        localServer.setUrl("http://localhost:8003");
+        localServer.setDescription("로컬 서버");
 
         return new OpenAPI()
                 .info(new Info()
@@ -48,7 +53,8 @@ public class SwaggerConfig {
                 .components(new Components()
                         .addSecuritySchemes(accessTokenHeader, accessTokenScheme)
                         .addSecuritySchemes(refreshTokenHeader, refreshTokenScheme))
-                .addServersItem(server)
+                .addServersItem(productionServer)
+                .addServersItem(localServer)
                 .addSecurityItem(accessTokenRequirement)
                 .addSecurityItem(refreshTokenRequirement);
     }

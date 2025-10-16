@@ -13,11 +13,13 @@ public enum SuccessStatus {
      * 200
      */
     SEND_HEALTH_CHECK_SUCCESS(HttpStatus.OK,"서버 상태 체크 성공"),
-    SEND_PARTS_ORDER_SUCCESS(HttpStatus.OK,"부품 주문 성공"),
+    SEND_CANCELLED_ORDER_SUCCESS(HttpStatus.OK, "주문 취소 성공"),
+    DELETE_ORDER_SUCCESS(HttpStatus.OK, "주문 삭제 성공"),
 
     /**
      * 201
      */
+    SEND_PARTS_ORDER_SUCCESS(HttpStatus.CREATED,"부품 주문 성공"),
 
     ;
 

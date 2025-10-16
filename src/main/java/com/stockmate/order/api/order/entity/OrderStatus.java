@@ -12,7 +12,8 @@ public enum OrderStatus {
     SHIPPING("SHIPPING"), // 배송중
     REJECTED("REJECTED"), // 출고 반려
     DELIVERED("DELIVERED"), // 배송 완료
-    RECEIVED("RECEIVED"); // 입고 완료
+    RECEIVED("RECEIVED"), // 입고 완료
+    CANCELLED("CANCELLED"); // 주문 취소
 
     private final String key;
 }
