@@ -40,7 +40,14 @@ public class InventoryService {
                     .retrieve()
                     .bodyToMono(InventoryCheckApiResponse.class)
                     .onErrorResume(WebClientResponseException.class, ex -> {
-                        log.error("부품 재고 체크 API 호출 실패 - Status: {}, Response: {}", 
+                        // 4xx 에러는 그대로 전달 (비즈니스 예외)
+                        if (ex.getStatusCode().is4xxClientError()) {
+                            log.warn("부품 재고 체크 클라이언트 에러 - Status: {}, Response: {}", 
+                                    ex.getStatusCode(), ex.getResponseBodyAsString());
+                            return Mono.error(ex);  // 그대로 전달
+                        }
+                        // 5xx 에러만 InternalServerException으로 변환
+                        log.error("부품 재고 체크 서버 에러 - Status: {}, Response: {}", 
                                 ex.getStatusCode(), ex.getResponseBodyAsString());
                         return Mono.error(new InternalServerException(ErrorStatus.NOT_CONNECTTION_PARTS_STOCK_EXCEPTION.getMessage()));
                     })
@@ -84,6 +91,9 @@ public class InventoryService {
 
         } catch (BadRequestException e) {
             throw e;
+        } catch (WebClientResponseException e) {
+            // WebClient 예외는 그대로 던져서 Circuit Breaker가 판단하도록
+            throw e;
         } catch (Exception e) {
             log.error("부품 재고 체크 중 예상치 못한 오류 - Error: {}", e.getMessage(), e);
             throw new InternalServerException(ErrorStatus.CHECK_PARTS_STOCK_EXCEPTION.getMessage());
@@ -101,7 +111,14 @@ public class InventoryService {
                     .retrieve()
                     .bodyToMono(PartDetailApiResponse.class)
                     .onErrorResume(WebClientResponseException.class, ex -> {
-                        log.error("부품 상세 정보 조회 API 호출 실패 - Status: {}, Response: {}",
+                        // 4xx 에러는 그대로 전달 (비즈니스 예외)
+                        if (ex.getStatusCode().is4xxClientError()) {
+                            log.warn("부품 상세 정보 조회 클라이언트 에러 - Status: {}, Response: {}", 
+                                    ex.getStatusCode(), ex.getResponseBodyAsString());
+                            return Mono.error(ex);  // 그대로 전달
+                        }
+                        // 5xx 에러만 InternalServerException으로 변환
+                        log.error("부품 상세 정보 조회 서버 에러 - Status: {}, Response: {}",
                                 ex.getStatusCode(), ex.getResponseBodyAsString());
                         return Mono.error(new InternalServerException(ErrorStatus.NOT_CONNECTTION_PARTS_DETAIL_EXCEPTION.getMessage()));
                     })
@@ -126,6 +143,9 @@ public class InventoryService {
             return partMap;
 
         } catch (InternalServerException e) {
+            throw e;
+        } catch (WebClientResponseException e) {
+            // WebClient 예외는 그대로 던져서 Circuit Breaker가 판단하도록
             throw e;
         } catch (Exception e) {
             log.error("부품 상세 정보 조회 중 예상치 못한 오류 - Error: {}", e.getMessage(), e);
