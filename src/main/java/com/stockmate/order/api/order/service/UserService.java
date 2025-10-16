@@ -3,8 +3,10 @@ package com.stockmate.order.api.order.service;
 import com.stockmate.order.api.order.dto.UserBatchApiResponse;
 import com.stockmate.order.api.order.dto.UserBatchRequestDTO;
 import com.stockmate.order.api.order.dto.UserBatchResponseDTO;
+import com.stockmate.order.api.order.service.fallback.UserServiceFallback;
 import com.stockmate.order.common.exception.InternalServerException;
 import com.stockmate.order.common.response.ErrorStatus;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,10 +25,12 @@ import java.util.Map;
 public class UserService {
 
     private final WebClient webClient;
+    private final UserServiceFallback userServiceFallback;
 
     @Value("${user.server.url}")
     private String userServerUrl;
 
+    @CircuitBreaker(name = "userService", fallbackMethod = "getUsersByMemberIdsFallback")
     public Map<Long, UserBatchResponseDTO> getUsersByMemberIds(List<Long> memberIds) {
         log.info("사용자 정보 일괄 조회 요청 - Member IDs 수: {}", memberIds.size());
 
@@ -71,5 +75,10 @@ public class UserService {
             log.error("사용자 정보 조회 중 예상치 못한 오류 - Error: {}", e.getMessage(), e);
             throw new InternalServerException(ErrorStatus.CHECK_USER_DETAIL_EXCEPTION.getMessage());
         }
+    }
+
+    // Circuit Breaker Fallback 메서드
+    private Map<Long, UserBatchResponseDTO> getUsersByMemberIdsFallback(List<Long> memberIds, Exception e) {
+        return userServiceFallback.getUsersByMemberIdsFallback(memberIds, e);
     }
 }
