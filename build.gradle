@@ -60,6 +60,9 @@ dependencies {
     // Config Client
     implementation 'org.springframework.cloud:spring-cloud-starter-config'
 
+    // Kafka
+    implementation 'org.springframework.kafka:spring-kafka'
+
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
     // Circuit Breaker (Resilience4j)

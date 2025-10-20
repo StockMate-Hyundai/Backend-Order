@@ -41,6 +41,7 @@ public class Order extends BaseTimeEntity {
     private int totalPrice; // 총 주문 금액
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "order_status", length = 50)
     private OrderStatus orderStatus;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
@@ -58,6 +59,27 @@ public class Order extends BaseTimeEntity {
     // 주문 취소
     public void cancel() {
         this.orderStatus = OrderStatus.CANCELLED;
+    }
+
+    // 주문 승인 요청 시작 (승인 대기 상태로 변경)
+    public void startApproval() {
+        this.orderStatus = OrderStatus.PENDING_APPROVAL;
+    }
+
+    // 주문 승인 완료 (출고 대기 상태로 변경)
+    public void approve() {
+        this.orderStatus = OrderStatus.PENDING_SHIPPING;
+    }
+
+    // 주문 반려
+    public void reject(String reason) {
+        this.orderStatus = OrderStatus.REJECTED;
+        this.rejectedMessage = reason;
+    }
+
+    // 주문 승인 실패 시 다시 주문 완료 상태로 되돌림
+    public void rollbackToOrderCompleted() {
+        this.orderStatus = OrderStatus.ORDER_COMPLETED;
     }
 
 }
