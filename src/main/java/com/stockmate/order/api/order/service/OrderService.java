@@ -30,6 +30,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final InventoryService inventoryService;
     private final UserService userService;
+    private final com.stockmate.order.common.producer.KafkaProducerService kafkaProducerService;
 
     @Transactional
     public void makeOrder(OrderRequestDTO orderRequestDTO, Long memberId) {
@@ -375,4 +376,118 @@ public class OrderService {
 
         return response;
     }
+
+    // 주문 승인 요청
+    @Transactional
+    public void requestOrderApproval(Long orderId, Role role) {
+        log.info("주문 승인 요청 - Order ID: {}, Role: {}", orderId, role);
+
+        // 권한 체크 (ADMIN, SUPER_ADMIN만 가능)
+        if (role != Role.ADMIN && role != Role.SUPER_ADMIN) {
+            log.error("권한 부족 - Role: {}", role);
+            throw new BadRequestException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
+        }
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> {
+                    log.error("주문을 찾을 수 없음 - Order ID: {}", orderId);
+                    return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
+                });
+
+        // 주문 상태 확인 (ORDER_COMPLETED만 승인 가능)
+        if (order.getOrderStatus() != OrderStatus.ORDER_COMPLETED) {
+            log.warn("승인 불가능한 상태 - Order ID: {}, Status: {}", orderId, order.getOrderStatus());
+            throw new BadRequestException(ErrorStatus.INVALID_ORDER_STATUS_FOR_APPROVAL.getMessage());
+        }
+
+        // 주문 상태를 PENDING_APPROVAL로 변경
+        order.startApproval();
+        orderRepository.save(order);
+
+        // Kafka 이벤트 발행 (재고 차감 요청)
+        List<StockDeductionRequestEvent.StockDeductionItem> items = order.getOrderItems().stream()
+                .map(item -> StockDeductionRequestEvent.StockDeductionItem.builder()
+                        .partId(item.getPartId())
+                        .amount(item.getAmount())
+                        .build())
+                .collect(Collectors.toList());
+
+        StockDeductionRequestEvent event = StockDeductionRequestEvent.builder()
+                .orderId(order.getOrderId())
+                .orderNumber(order.getOrderNumber())
+                .items(items)
+                .build();
+
+        kafkaProducerService.sendStockDeductionRequest(event);
+
+        log.info("주문 승인 요청 완료 - Order ID: {}, Order Number: {}, Status: PENDING_APPROVAL", 
+                orderId, order.getOrderNumber());
+    }
+
+    // 주문 승인 상태 체크
+    @Transactional(readOnly = true)
+    public OrderStatus checkOrderApprovalStatus(Long orderId, Long memberId, Role role) {
+        log.info("주문 승인 상태 체크 - Order ID: {}, Member ID: {}, Role: {}", orderId, memberId, role);
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> {
+                    log.error("주문을 찾을 수 없음 - Order ID: {}", orderId);
+                    return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
+                });
+
+        // 권한 체크: 본인 주문 또는 ADMIN/SUPER_ADMIN
+        boolean isAdmin = role == Role.ADMIN || role == Role.SUPER_ADMIN;
+        if (!isAdmin && !order.getMemberId().equals(memberId)) {
+            log.error("권한 없음 - Order의 Member ID: {}, 요청자 Member ID: {}, Role: {}", 
+                    order.getMemberId(), memberId, role);
+            throw new BadRequestException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
+        }
+
+        log.info("주문 상태 조회 완료 - Order ID: {}, Status: {}", orderId, order.getOrderStatus());
+        return order.getOrderStatus();
+    }
+
+    // 재고 차감 성공 이벤트 처리
+    @Transactional
+    public void handleStockDeductionSuccess(StockDeductionSuccessEvent event) {
+        log.info("재고 차감 성공 처리 시작 - Order ID: {}", event.getOrderId());
+
+        Order order = orderRepository.findById(event.getOrderId())
+                .orElseThrow(() -> {
+                    log.error("주문을 찾을 수 없음 - Order ID: {}", event.getOrderId());
+                    return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
+                });
+
+        // 상태가 PENDING_APPROVAL인지 확인
+        if (order.getOrderStatus() != OrderStatus.PENDING_APPROVAL) {
+            log.warn("이미 처리된 주문 - Order ID: {}, Status: {}", event.getOrderId(), order.getOrderStatus());
+            return;
+        }
+
+        // 주문 승인 완료 (출고 대기 상태로 변경)
+        order.approve();
+        orderRepository.save(order);
+
+        log.info("재고 차감 성공 - 주문 승인 완료 - Order ID: {}, Status: PENDING_SHIPPING", event.getOrderId());
+    }
+
+    // 재고 차감 실패 이벤트 처리 (보상 트랜잭션)
+    @Transactional
+    public void handleStockDeductionFailed(StockDeductionFailedEvent event) {
+        log.info("재고 차감 실패 처리 시작 (보상 트랜잭션) - Order ID: {}", event.getOrderId());
+
+        Order order = orderRepository.findById(event.getOrderId())
+                .orElseThrow(() -> {
+                    log.error("주문을 찾을 수 없음 - Order ID: {}", event.getOrderId());
+                    return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
+                });
+
+        // 주문을 다시 ORDER_COMPLETED로 되돌림 (보상 트랜잭션)
+        order.rollbackToOrderCompleted();
+        orderRepository.save(order);
+
+        log.info("재고 차감 실패 - 주문 상태를 ORDER_COMPLETED로 되돌림 - Order ID: {}, Reason: {}", 
+                event.getOrderId(), event.getReason());
+    }
+
 }

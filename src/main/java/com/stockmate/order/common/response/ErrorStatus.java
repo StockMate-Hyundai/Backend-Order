@@ -18,6 +18,7 @@ public enum ErrorStatus {
     SOLD_OUT_PARTS_EXCEPTION(HttpStatus.BAD_REQUEST,"부품 재고가 부족합니다."),
     ALREADY_CANCELLED_ORDER_EXCEPTION(HttpStatus.BAD_REQUEST,"이미 취소된 주문입니다."),
     ALREADY_SHIPPED_OR_DELIVERED_ORDER_EXCEPTION(HttpStatus.BAD_REQUEST,"배송 중이거나 완료된 주문은 취소할 수 없습니다."),
+    INVALID_ORDER_STATUS_FOR_APPROVAL(HttpStatus.BAD_REQUEST,"주문 완료 상태만 승인할 수 있습니다."),
     PARTS_SERVER_UNAVAILABLE_EXCEPTION(HttpStatus.SERVICE_UNAVAILABLE,"부품 서버가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해주세요."),
     USER_SERVER_UNAVAILABLE_EXCEPTION(HttpStatus.SERVICE_UNAVAILABLE,"사용자 서버가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해주세요."),
 
