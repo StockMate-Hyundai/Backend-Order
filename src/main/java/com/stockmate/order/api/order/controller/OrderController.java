@@ -34,6 +34,20 @@ public class OrderController {
         return ApiResponse.success_only(SuccessStatus.SEND_PARTS_ORDER_SUCCESS);
     }
 
+    @Operation(summary = "주문 승인 요청 API", description = "주문을 승인하고 재고 차감을 요청합니다. (ADMIN/SUPER_ADMIN만 가능)")
+    @PutMapping("/{orderId}/approve")
+    public ResponseEntity<ApiResponse<Void>> approveOrder(@PathVariable Long orderId, @AuthenticationPrincipal SecurityUser securityUser) {
+        
+        log.info("주문 승인 요청 - Order ID: {}, 요청자 ID: {}, 요청자 Role: {}", 
+                orderId, securityUser.getMemberId(), securityUser.getRole());
+
+        orderService.requestOrderApproval(orderId, securityUser.getRole());
+        
+        log.info("주문 승인 요청 완료 - Order ID: {} (재고 차감 처리 중)", orderId);
+        
+        return ApiResponse.success_only(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS);
+    }
+
     @Operation(summary = "주문 취소 API", description = "생성한 주문을 취소합니다. (본인 주문 또는 ADMIN/SUPER_ADMIN)")
     @PutMapping("/{orderId}/cancel")
     public ResponseEntity<ApiResponse<Void>> cancelOrder(@PathVariable Long orderId, @AuthenticationPrincipal SecurityUser securityUser) {
@@ -56,17 +70,46 @@ public class OrderController {
         return ApiResponse.success_only(SuccessStatus.DELETE_ORDER_SUCCESS);
     }
 
+    @Operation(summary = "주문 승인 요청 API", description = "주문을 승인합니다. (ADMIN/SUPER_ADMIN만 가능)")
+    @PutMapping("/approve")
+    public ResponseEntity<ApiResponse<Void>> requestOrderApproval(@RequestParam Long orderId, @AuthenticationPrincipal SecurityUser securityUser) {
+        
+        log.info("주문 승인 요청 - Order ID: {}, 요청자 ID: {}, 요청자 Role: {}", 
+                orderId, securityUser.getMemberId(), securityUser.getRole());
+
+        orderService.requestOrderApproval(orderId, securityUser.getRole());
+        
+        log.info("주문 승인 요청 완료 - Order ID: {}", orderId);
+        
+        return ApiResponse.success_only(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS);
+    }
+
+    @Operation(summary = "주문 승인 상태 체크 API", description = "주문의 현재 상태를 확인합니다. (본인 주문 또는 ADMIN/SUPER_ADMIN)")
+    @GetMapping("/approval/status")
+    public ResponseEntity<ApiResponse<OrderStatus>> checkOrderApprovalStatus(@RequestParam Long orderId, @AuthenticationPrincipal SecurityUser securityUser) {
+        
+        log.info("주문 승인 상태 체크 요청 - Order ID: {}, 요청자 ID: {}", 
+                orderId, securityUser.getMemberId());
+
+        OrderStatus status = orderService.checkOrderApprovalStatus(
+                orderId, 
+                securityUser.getMemberId(), 
+                securityUser.getRole()
+        );
+        
+        log.info("주문 승인 상태 체크 완료 - Order ID: {}, Status: {}", orderId, status);
+        
+        return ApiResponse.success(SuccessStatus.CHECK_ORDER_APPROVAL_STATUS_SUCCESS, status);
+    }
+
     @Operation(summary = "주문 상세 조회 API", description = "주문 ID로 주문 상세 정보를 조회합니다. (본인 주문 또는 ADMIN/SUPER_ADMIN)")
     @GetMapping("/detail")
     public ResponseEntity<ApiResponse<OrderDetailResponseDTO>> getOrderDetail(@RequestParam Long orderId, @AuthenticationPrincipal SecurityUser securityUser) {
         
         log.info("주문 상세 조회 요청 - Order ID: {}, 요청자 ID: {}, 요청자 Role: {}", orderId, securityUser.getMemberId(), securityUser.getRole());
-
-        OrderDetailResponseDTO response = orderService.getOrderDetail(orderId, securityUser.getMemberId(), securityUser.getRole()
-        );
+        OrderDetailResponseDTO response = orderService.getOrderDetail(orderId, securityUser.getMemberId(), securityUser.getRole());
         
         log.info("주문 상세 조회 완료 - Order ID: {}, Order Number: {}", orderId, response.getOrderNumber());
-        
         return ApiResponse.success(SuccessStatus.SEND_ORDER_DETAIL_SUCCESS, response);
     }
 
