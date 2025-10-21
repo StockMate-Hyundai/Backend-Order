@@ -4,6 +4,8 @@ import com.stockmate.order.api.order.dto.*;
 import com.stockmate.order.api.order.entity.OrderStatus;
 import com.stockmate.order.api.order.service.OrderService;
 import com.stockmate.order.common.config.security.SecurityUser;
+import com.stockmate.order.common.exception.BadRequestException;
+import com.stockmate.order.common.exception.NotFoundException;
 import com.stockmate.order.common.response.ApiResponse;
 import com.stockmate.order.common.response.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
@@ -72,39 +74,68 @@ public class OrderController {
 
     @Operation(summary = "주문 승인 요청 API", description = "주문을 승인하고 최종 결과를 비동기로 반환합니다. 최대 10초 대기하며, 타임아웃 시 PENDING_APPROVAL 상태를 반환합니다. 서블릿 스레드는 즉시 해제됩니다. (ADMIN/SUPER_ADMIN만 가능)")
     @PutMapping("/approve")
-    public DeferredResult<ResponseEntity<ApiResponse<OrderStatus>>> requestOrderApproval(
-            @RequestParam Long orderId, 
-            @AuthenticationPrincipal SecurityUser securityUser) {
+    public DeferredResult<ResponseEntity<?>> requestOrderApproval(@RequestParam Long orderId, @AuthenticationPrincipal SecurityUser securityUser) {
         
         log.info("주문 승인 요청 (비동기) - Order ID: {}, 요청자 ID: {}, 요청자 Role: {}", 
                 orderId, securityUser.getMemberId(), securityUser.getRole());
 
         // DeferredResult 생성 (타임아웃 10초)
-        DeferredResult<ResponseEntity<ApiResponse<OrderStatus>>> result = new DeferredResult<>(10000L);
+        DeferredResult<ResponseEntity<?>> result = new DeferredResult<>(10000L);
 
-        // Service에서 반환한 DeferredResult를 래핑
-        DeferredResult<OrderStatus> serviceDeferredResult = orderService.requestOrderApproval(orderId, securityUser.getRole());
+        try {
+            // Service에서 반환한 DeferredResult를 래핑
+            DeferredResult<OrderStatus> serviceDeferredResult = orderService.requestOrderApproval(orderId, securityUser.getRole());
 
-        // Service의 DeferredResult가 완료되면 Controller의 DeferredResult도 완료
-        serviceDeferredResult.onCompletion(() -> {
-            OrderStatus status = (OrderStatus) serviceDeferredResult.getResult();
-            if (status != null) {
-                result.setResult(ApiResponse.success(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, status));
-                log.info("주문 승인 요청 완료 (비동기 응답) - Order ID: {}, Final Status: {}", orderId, status);
+            // Service의 DeferredResult가 완료되면 Controller의 DeferredResult도 완료
+            serviceDeferredResult.onCompletion(() -> {
+                OrderStatus status = (OrderStatus) serviceDeferredResult.getResult();
+                if (status != null) {
+                    result.setResult(ApiResponse.success(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, status));
+                    log.info("주문 승인 요청 완료 (비동기 응답) - Order ID: {}, Final Status: {}", orderId, status);
+                }
+            });
+
+            serviceDeferredResult.onTimeout(() -> {
+                result.setResult(ApiResponse.success(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, OrderStatus.PENDING_APPROVAL));
+                log.warn("주문 승인 요청 타임아웃 (비동기 응답) - Order ID: {}", orderId);
+            });
+
+            serviceDeferredResult.onError((throwable) -> {
+                log.error("주문 승인 요청 에러 (비동기 응답) - Order ID: {}, 에러: {}", orderId, throwable.getMessage());
+                
+                if (throwable instanceof BadRequestException) {
+                    BadRequestException ex = (BadRequestException) throwable;
+                    result.setResult(ResponseEntity.status(ex.getStatusCode())
+                            .body(ApiResponse.fail(ex.getStatusCode(), ex.getMessage())));
+                } else if (throwable instanceof NotFoundException) {
+                    NotFoundException ex = (NotFoundException) throwable;
+                    result.setResult(ResponseEntity.status(ex.getStatusCode())
+                            .body(ApiResponse.fail(ex.getStatusCode(), ex.getMessage())));
+                } else {
+                    result.setResult(ResponseEntity.status(500)
+                            .body(ApiResponse.fail(500, "주문 승인 처리 중 오류가 발생했습니다.")));
+                }
+            });
+
+            log.info("주문 승인 요청 접수 완료, 서블릿 스레드 해제 - Order ID: {}", orderId);
+            
+        } catch (Exception e) {
+            // Service 호출 중 즉시 발생한 예외 처리
+            log.error("주문 승인 요청 중 즉시 예외 발생 - Order ID: {}, 에러: {}", orderId, e.getMessage());
+            
+            if (e instanceof BadRequestException) {
+                BadRequestException ex = (BadRequestException) e;
+                result.setResult(ResponseEntity.status(ex.getStatusCode())
+                        .body(ApiResponse.fail(ex.getStatusCode(), ex.getMessage())));
+            } else if (e instanceof NotFoundException) {
+                NotFoundException ex = (NotFoundException) e;
+                result.setResult(ResponseEntity.status(ex.getStatusCode())
+                        .body(ApiResponse.fail(ex.getStatusCode(), ex.getMessage())));
+            } else {
+                result.setResult(ResponseEntity.status(500)
+                        .body(ApiResponse.fail(500, "주문 승인 처리 중 오류가 발생했습니다.")));
             }
-        });
-
-        serviceDeferredResult.onTimeout(() -> {
-            result.setResult(ApiResponse.success(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, OrderStatus.PENDING_APPROVAL));
-            log.warn("주문 승인 요청 타임아웃 (비동기 응답) - Order ID: {}", orderId);
-        });
-
-        serviceDeferredResult.onError((throwable) -> {
-            result.setErrorResult(throwable);
-            log.error("주문 승인 요청 에러 (비동기 응답) - Order ID: {}, 에러: {}", orderId, throwable.getMessage());
-        });
-
-        log.info("주문 승인 요청 접수 완료, 서블릿 스레드 해제 - Order ID: {}", orderId);
+        }
         
         return result;
     }
