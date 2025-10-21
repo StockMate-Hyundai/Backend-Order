@@ -423,6 +423,13 @@ public class OrderService {
     public void requestOrderApprovalAsync(Long orderId, Role role, DeferredResult<ResponseEntity<?>> deferredResult) {
         log.info("주문 승인 요청 (비동기) - Order ID: {}, Role: {}", orderId, role);
 
+        // 타임아웃 콜백 설정
+        deferredResult.onTimeout(() -> {
+            log.warn("DeferredResult 타임아웃 - Order ID: {}, 백그라운드에서 계속 처리됨", orderId);
+            pendingApprovals.remove(orderId);
+            deferredResult.setResult(ApiResponse.success(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, OrderStatus.PENDING_APPROVAL));
+        });
+
         // 권한 체크 (ADMIN, SUPER_ADMIN만 가능)
         if (role != Role.ADMIN && role != Role.SUPER_ADMIN) {
             log.error("권한 부족 - Role: {}", role);
