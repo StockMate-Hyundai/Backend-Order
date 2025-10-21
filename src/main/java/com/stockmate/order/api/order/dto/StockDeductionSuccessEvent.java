@@ -12,4 +12,5 @@ import lombok.NoArgsConstructor;
 public class StockDeductionSuccessEvent {
     private Long orderId;
     private String orderNumber;
+    private String approvalAttemptId; // Saga 시도 식별자
 }

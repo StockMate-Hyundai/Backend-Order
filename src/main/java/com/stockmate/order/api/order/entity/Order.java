@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -44,6 +45,12 @@ public class Order extends BaseTimeEntity {
     @Column(name = "order_status", length = 50)
     private OrderStatus orderStatus;
 
+    @Column(name = "approval_attempt_id")
+    private String approvalAttemptId; // Saga 시도 식별자 (레이스 컨디션 방지)
+
+    @Column(name = "approval_started_at")
+    private LocalDateTime approvalStartedAt; // 승인 시작 시간 (장기 PENDING 방지용)
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();
@@ -62,8 +69,10 @@ public class Order extends BaseTimeEntity {
     }
 
     // 주문 승인 요청 시작 (승인 대기 상태로 변경)
-    public void startApproval() {
+    public void startApproval(String attemptId) {
         this.orderStatus = OrderStatus.PENDING_APPROVAL;
+        this.approvalAttemptId = attemptId;
+        this.approvalStartedAt = LocalDateTime.now();
     }
 
     // 주문 승인 완료 (출고 대기 상태로 변경)
