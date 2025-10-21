@@ -14,6 +14,7 @@ import java.util.List;
 public class StockDeductionRequestEvent {
     private Long orderId;
     private String orderNumber;
+    private String approvalAttemptId; // Saga 시도 식별자
     private List<StockDeductionItem> items;
 
     @Getter

@@ -20,7 +20,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import org.springframework.web.context.request.async.DeferredResult;
 
 @Slf4j
 @Service
@@ -31,6 +33,10 @@ public class OrderService {
     private final InventoryService inventoryService;
     private final UserService userService;
     private final com.stockmate.order.common.producer.KafkaProducerService kafkaProducerService;
+
+    // 주문 승인 대기 중인 DeferredResult를 관리하는 맵 (Order ID -> DeferredResult)
+    private final ConcurrentHashMap<Long, DeferredResult<OrderStatus>> pendingApprovals = new ConcurrentHashMap<>();
+    private static final long APPROVAL_TIMEOUT_MILLIS = 10000L; // 10초 타임아웃
 
     @Transactional
     public void makeOrder(OrderRequestDTO orderRequestDTO, Long memberId) {
@@ -407,17 +413,94 @@ public class OrderService {
         log.info("주문 반려 완료 - Order ID: {}, Order Number: {}, Status: REJECTED", orderRejectRequestDTO.getOrderId(), order.getOrderNumber());
     }
 
-    // 주문 승인 요청
-    @Transactional
-    public void requestOrderApproval(Long orderId, Role role) {
-        log.info("주문 승인 요청 - Order ID: {}, Role: {}", orderId, role);
+    // 주문 승인 요청 (비동기 응답 - DeferredResult 사용)
+    public DeferredResult<OrderStatus> requestOrderApproval(Long orderId, Role role) {
+        log.info("주문 승인 요청 (비동기) - Order ID: {}, Role: {}", orderId, role);
+
+        // DeferredResult 생성 (10초 타임아웃)
+        DeferredResult<OrderStatus> deferredResult = new DeferredResult<>(APPROVAL_TIMEOUT_MILLIS);
+
+        // 타임아웃 콜백 설정
+        deferredResult.onTimeout(() -> {
+            log.warn("주문 승인 응답 타임아웃 - Order ID: {}, 백그라운드에서 계속 처리됨", orderId);
+            pendingApprovals.remove(orderId);
+            deferredResult.setResult(OrderStatus.PENDING_APPROVAL);
+        });
+
+        // 완료 콜백 설정 (정상 또는 타임아웃)
+        deferredResult.onCompletion(() -> {
+            log.debug("DeferredResult 완료 - Order ID: {}", orderId);
+        });
 
         // 권한 체크 (ADMIN, SUPER_ADMIN만 가능)
         if (role != Role.ADMIN && role != Role.SUPER_ADMIN) {
             log.error("권한 부족 - Role: {}", role);
-            throw new BadRequestException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
+            deferredResult.setErrorResult(new BadRequestException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage()));
+            return deferredResult;
         }
 
+        // Saga 시도 식별자 생성
+        String approvalAttemptId = UUID.randomUUID().toString();
+        log.info("Saga 시도 식별자 생성 - Order ID: {}, Attempt ID: {}", orderId, approvalAttemptId);
+
+        try {
+            // 1단계: 상태 변경을 별도 트랜잭션으로 먼저 커밋 (REQUIRES_NEW)
+            updateOrderStatusToApproval(orderId, approvalAttemptId);
+
+            // 2단계: DB 커밋 이후 OrderItems와 함께 로드 (LazyInitializationException 방지)
+            Order order = orderRepository.findByIdWithItems(orderId)
+                    .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
+
+            // DeferredResult 등록
+            pendingApprovals.put(orderId, deferredResult);
+
+            // 3단계: Kafka 이벤트 발행 (실패 시 보상 트랜잭션)
+            List<StockDeductionRequestEvent.StockDeductionItem> items = order.getOrderItems().stream()
+                    .map(item -> StockDeductionRequestEvent.StockDeductionItem.builder()
+                            .partId(item.getPartId())
+                            .amount(item.getAmount())
+                            .build())
+                    .collect(Collectors.toList());
+
+            StockDeductionRequestEvent event = StockDeductionRequestEvent.builder()
+                    .orderId(order.getOrderId())
+                    .orderNumber(order.getOrderNumber())
+                    .approvalAttemptId(approvalAttemptId)
+                    .items(items)
+                    .build();
+
+            kafkaProducerService.sendStockDeductionRequest(event);
+
+            log.info("주문 승인 요청 완료, 서블릿 스레드 해제 - Order ID: {}, Attempt ID: {}, Timeout: {}ms", 
+                    orderId, approvalAttemptId, APPROVAL_TIMEOUT_MILLIS);
+
+        } catch (Exception e) {
+            // Kafka 발행 실패 시 보상 트랜잭션 (주문 상태 복원)
+            log.error("Kafka 이벤트 발행 실패 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
+            rollbackOrderToCompleted(orderId);
+            pendingApprovals.remove(orderId);
+            deferredResult.setErrorResult(new BadRequestException("주문 승인 요청 중 오류가 발생했습니다. 다시 시도해주세요."));
+        }
+
+        return deferredResult; // 서블릿 스레드 즉시 반환
+    }
+
+    // Kafka 발행 실패 시 주문 상태를 ORDER_COMPLETED로 복원
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void rollbackOrderToCompleted(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
+        
+        if (order.getOrderStatus() == OrderStatus.PENDING_APPROVAL) {
+            order.rollbackToOrderCompleted();
+            orderRepository.save(order);
+            log.info("Kafka 발행 실패로 주문 상태 복원 - Order ID: {}, Status: ORDER_COMPLETED", orderId);
+        }
+    }
+
+    // 주문 상태를 PENDING_APPROVAL로 변경 (별도 트랜잭션 - REQUIRES_NEW)
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void updateOrderStatusToApproval(Long orderId, String approvalAttemptId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> {
                     log.error("주문을 찾을 수 없음 - Order ID: {}", orderId);
@@ -431,27 +514,11 @@ public class OrderService {
         }
 
         // 주문 상태를 PENDING_APPROVAL로 변경
-        order.startApproval();
+        order.startApproval(approvalAttemptId);
         orderRepository.save(order);
 
-        // Kafka 이벤트 발행 (재고 차감 요청)
-        List<StockDeductionRequestEvent.StockDeductionItem> items = order.getOrderItems().stream()
-                .map(item -> StockDeductionRequestEvent.StockDeductionItem.builder()
-                        .partId(item.getPartId())
-                        .amount(item.getAmount())
-                        .build())
-                .collect(Collectors.toList());
-
-        StockDeductionRequestEvent event = StockDeductionRequestEvent.builder()
-                .orderId(order.getOrderId())
-                .orderNumber(order.getOrderNumber())
-                .items(items)
-                .build();
-
-        kafkaProducerService.sendStockDeductionRequest(event);
-
-        log.info("주문 승인 요청 완료 - Order ID: {}, Order Number: {}, Status: PENDING_APPROVAL", 
-                orderId, order.getOrderNumber());
+        log.info("주문 상태 변경 완료 (별도 트랜잭션) - Order ID: {}, Status: PENDING_APPROVAL, Attempt ID: {}", 
+                orderId, approvalAttemptId);
     }
 
     // 주문 승인 상태 체크
@@ -480,7 +547,8 @@ public class OrderService {
     // 재고 차감 성공 이벤트 처리
     @Transactional
     public void handleStockDeductionSuccess(StockDeductionSuccessEvent event) {
-        log.info("재고 차감 성공 처리 시작 - Order ID: {}", event.getOrderId());
+        log.info("재고 차감 성공 처리 시작 - Order ID: {}, Attempt ID: {}", 
+                event.getOrderId(), event.getApprovalAttemptId());
 
         Order order = orderRepository.findById(event.getOrderId())
                 .orElseThrow(() -> {
@@ -488,9 +556,16 @@ public class OrderService {
                     return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
                 });
 
-        // 상태가 PENDING_APPROVAL인지 확인
+        // 상태가 PENDING_APPROVAL이고, attemptId가 일치하는지 확인 (레이스 컨디션 방지)
         if (order.getOrderStatus() != OrderStatus.PENDING_APPROVAL) {
-            log.warn("이미 처리된 주문 - Order ID: {}, Status: {}", event.getOrderId(), order.getOrderStatus());
+            log.warn("주문 상태가 PENDING_APPROVAL이 아님 - Order ID: {}, Status: {}", 
+                    event.getOrderId(), order.getOrderStatus());
+            return;
+        }
+
+        if (!event.getApprovalAttemptId().equals(order.getApprovalAttemptId())) {
+            log.warn("Attempt ID 불일치 (오래된 이벤트) - Order ID: {}, 이벤트 Attempt: {}, 주문 Attempt: {}", 
+                    event.getOrderId(), event.getApprovalAttemptId(), order.getApprovalAttemptId());
             return;
         }
 
@@ -499,12 +574,22 @@ public class OrderService {
         orderRepository.save(order);
 
         log.info("재고 차감 성공 - 주문 승인 완료 - Order ID: {}, Status: PENDING_SHIPPING", event.getOrderId());
+
+        // DeferredResult 완료 처리 (타임아웃 전이라면)
+        DeferredResult<OrderStatus> deferredResult = pendingApprovals.remove(event.getOrderId());
+        if (deferredResult != null && !deferredResult.isSetOrExpired()) {
+            deferredResult.setResult(OrderStatus.PENDING_SHIPPING);
+            log.info("DeferredResult 완료 - Order ID: {}, Status: PENDING_SHIPPING (클라이언트에 응답 전송)", event.getOrderId());
+        } else if (deferredResult != null) {
+            log.info("DeferredResult 이미 완료됨 (타임아웃) - Order ID: {}", event.getOrderId());
+        }
     }
 
     // 재고 차감 실패 이벤트 처리 (보상 트랜잭션)
     @Transactional
     public void handleStockDeductionFailed(StockDeductionFailedEvent event) {
-        log.info("재고 차감 실패 처리 시작 (보상 트랜잭션) - Order ID: {}", event.getOrderId());
+        log.info("재고 차감 실패 처리 시작 (보상 트랜잭션) - Order ID: {}, Attempt ID: {}", 
+                event.getOrderId(), event.getApprovalAttemptId());
 
         Order order = orderRepository.findById(event.getOrderId())
                 .orElseThrow(() -> {
@@ -512,12 +597,34 @@ public class OrderService {
                     return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
                 });
 
+        // 상태가 PENDING_APPROVAL이고, attemptId가 일치하는지 확인 (레이스 컨디션 방지)
+        if (order.getOrderStatus() != OrderStatus.PENDING_APPROVAL) {
+            log.warn("주문 상태가 PENDING_APPROVAL이 아님 - Order ID: {}, Status: {}", 
+                    event.getOrderId(), order.getOrderStatus());
+            return;
+        }
+
+        if (!event.getApprovalAttemptId().equals(order.getApprovalAttemptId())) {
+            log.warn("Attempt ID 불일치 (오래된 이벤트) - Order ID: {}, 이벤트 Attempt: {}, 주문 Attempt: {}", 
+                    event.getOrderId(), event.getApprovalAttemptId(), order.getApprovalAttemptId());
+            return;
+        }
+
         // 주문을 다시 ORDER_COMPLETED로 되돌림 (보상 트랜잭션)
         order.rollbackToOrderCompleted();
         orderRepository.save(order);
 
         log.info("재고 차감 실패 - 주문 상태를 ORDER_COMPLETED로 되돌림 - Order ID: {}, Reason: {}", 
                 event.getOrderId(), event.getReason());
+
+        // DeferredResult 완료 처리 (타임아웃 전이라면)
+        DeferredResult<OrderStatus> deferredResult = pendingApprovals.remove(event.getOrderId());
+        if (deferredResult != null && !deferredResult.isSetOrExpired()) {
+            deferredResult.setResult(OrderStatus.ORDER_COMPLETED);
+            log.info("DeferredResult 완료 - Order ID: {}, Status: ORDER_COMPLETED (실패 후 복원, 클라이언트에 응답 전송)", event.getOrderId());
+        } else if (deferredResult != null) {
+            log.info("DeferredResult 이미 완료됨 (타임아웃) - Order ID: {}", event.getOrderId());
+        }
     }
 
 }
