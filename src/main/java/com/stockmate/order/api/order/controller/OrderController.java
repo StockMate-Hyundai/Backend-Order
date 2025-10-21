@@ -70,6 +70,19 @@ public class OrderController {
         return ApiResponse.success_only(SuccessStatus.DELETE_ORDER_SUCCESS);
     }
 
+    @Operation(summary = "주문 반려 API", description = "주문을 반려합니다. (ADMIN/SUPER_ADMIN만 가능)")
+    @PutMapping("/reject")
+    public ResponseEntity<ApiResponse<Void>> requestOrderReject(@RequestBody OrderRejectRequestDTO orderRejectRequestDTO, @AuthenticationPrincipal SecurityUser securityUser) {
+
+        log.info("주문 반려 요청 - Order ID: {}, 요청자 ID: {}, 요청자 Role: {}", orderRejectRequestDTO.getOrderId(), securityUser.getMemberId(), securityUser.getRole());
+
+        orderService.requestOrderReject(orderRejectRequestDTO, securityUser.getRole());
+
+        log.info("주문 반려 요청 완료 - Order ID: {}", orderRejectRequestDTO.getOrderId());
+
+        return ApiResponse.success_only(SuccessStatus.SEND_ORDER_REJECT_REQUEST_SUCCESS);
+    }
+
     @Operation(summary = "주문 승인 요청 API", description = "주문을 승인합니다. (ADMIN/SUPER_ADMIN만 가능)")
     @PutMapping("/approve")
     public ResponseEntity<ApiResponse<Void>> requestOrderApproval(@RequestParam Long orderId, @AuthenticationPrincipal SecurityUser securityUser) {
