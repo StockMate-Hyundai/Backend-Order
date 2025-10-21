@@ -82,15 +82,9 @@ public class OrderController {
         // DeferredResult 생성 (타임아웃 10초) - Controller에서 생성
         DeferredResult<ResponseEntity<?>> result = new DeferredResult<>(10000L);
 
-        // 타임아웃 콜백
-        result.onTimeout(() -> {
-            log.warn("DeferredResult 타임아웃 - Order ID: {}", orderId);
-            result.setResult(ApiResponse.success(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, OrderStatus.PENDING_APPROVAL));
-        });
-
-        // 완료 콜백
+        // 완료 콜백 (로깅용)
         result.onCompletion(() -> {
-            log.info("DeferredResult 완료 콜백 실행 - Order ID: {}", orderId);
+            log.info("DeferredResult 완료 - Order ID: {}", orderId);
         });
 
         // Service 호출 (Controller의 DeferredResult를 전달)
