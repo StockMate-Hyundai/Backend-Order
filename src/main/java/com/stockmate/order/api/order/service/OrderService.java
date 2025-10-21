@@ -26,6 +26,8 @@ import org.springframework.data.domain.Pageable;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.context.request.async.DeferredResult;
@@ -43,6 +45,9 @@ public class OrderService {
 
     // 주문 승인 대기 중인 DeferredResult를 관리하는 맵 (Order ID -> DeferredResult)
     private final ConcurrentHashMap<Long, DeferredResult<ResponseEntity<?>>> pendingApprovals = new ConcurrentHashMap<>();
+    
+    // SecurityContext를 저장하는 맵 (Order ID -> Authentication)
+    private final ConcurrentHashMap<Long, Authentication> pendingAuthentications = new ConcurrentHashMap<>();
 
     @Transactional
     public void makeOrder(OrderRequestDTO orderRequestDTO, Long memberId) {
@@ -423,11 +428,23 @@ public class OrderService {
     public void requestOrderApprovalAsync(Long orderId, Role role, DeferredResult<ResponseEntity<?>> deferredResult) {
         log.info("주문 승인 요청 (비동기) - Order ID: {}, Role: {}", orderId, role);
 
+        // 현재 스레드의 SecurityContext를 저장 (나중에 전파용)
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        pendingAuthentications.put(orderId, authentication);
+        log.debug("SecurityContext 저장 - Order ID: {}, Authentication: {}", orderId, authentication);
+
         // 타임아웃 콜백 설정
         deferredResult.onTimeout(() -> {
             log.warn("DeferredResult 타임아웃 - Order ID: {}, 백그라운드에서 계속 처리됨", orderId);
             pendingApprovals.remove(orderId);
-            deferredResult.setResult(ApiResponse.success(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, OrderStatus.PENDING_APPROVAL));
+            pendingAuthentications.remove(orderId); // SecurityContext도 제거
+            
+            // ResponseEntity를 직접 반환
+            ResponseEntity<?> response = ApiResponse.success(
+                    SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, 
+                    OrderStatus.PENDING_APPROVAL
+            );
+            deferredResult.setResult(response);
         });
 
         // 권한 체크 (ADMIN, SUPER_ADMIN만 가능)
@@ -436,6 +453,7 @@ public class OrderService {
             BadRequestException ex = new BadRequestException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
             deferredResult.setResult(ResponseEntity.status(ex.getStatusCode())
                     .body(ApiResponse.fail(ex.getStatusCode(), ex.getMessage())));
+            pendingAuthentications.remove(orderId);
             return;
         }
 
@@ -494,6 +512,7 @@ public class OrderService {
             log.error("Kafka 이벤트 발행 실패 또는 처리 중 에러 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
             orderTransactionService.rollbackOrderToCompleted(orderId);
             pendingApprovals.remove(orderId);
+            pendingAuthentications.remove(orderId); // SecurityContext도 제거
             
             if (e instanceof BaseException) {
                 BaseException ex = (BaseException) e;
@@ -562,20 +581,45 @@ public class OrderService {
 
         // 트랜잭션 커밋 후 DeferredResult 완료 (TransactionSynchronization 사용)
         DeferredResult<ResponseEntity<?>> deferredResult = pendingApprovals.get(event.getOrderId());
+        Authentication savedAuthentication = pendingAuthentications.get(event.getOrderId());
+        
         if (deferredResult != null && !deferredResult.isSetOrExpired()) {
+            // afterCommit()는 트랜잭션 스레드(Kafka Consumer)에서 실행되므로 즉시 완료 가능
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    // 트랜잭션 커밋 후 DeferredResult 완료
-                    pendingApprovals.remove(event.getOrderId());
-                    deferredResult.setResult(ApiResponse.success(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, OrderStatus.PENDING_SHIPPING));
-                    log.info("트랜잭션 커밋 후 DeferredResult 완료 - Order ID: {}, Status: PENDING_SHIPPING", 
-                            event.getOrderId());
+                    try {
+                        // SecurityContext 복원 (DeferredResult 완료 시 필요)
+                        if (savedAuthentication != null) {
+                            SecurityContextHolder.getContext().setAuthentication(savedAuthentication);
+                            log.debug("SecurityContext 복원 - Order ID: {}, Authentication: {}", 
+                                    event.getOrderId(), savedAuthentication.getName());
+                        }
+                        
+                        // 트랜잭션 커밋 후 즉시 DeferredResult 완료
+                        pendingApprovals.remove(event.getOrderId());
+                        pendingAuthentications.remove(event.getOrderId());
+                        
+                        // ResponseEntity를 직접 반환
+                        ResponseEntity<?> response = ApiResponse.success(
+                                SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, 
+                                OrderStatus.PENDING_SHIPPING
+                        );
+                        deferredResult.setResult(response);
+                        
+                        log.info("트랜잭션 커밋 후 DeferredResult 완료 - Order ID: {}, Status: PENDING_SHIPPING", 
+                                event.getOrderId());
+                        
+                    } finally {
+                        // SecurityContext 정리
+                        SecurityContextHolder.clearContext();
+                    }
                 }
             });
         } else if (deferredResult != null) {
             log.info("DeferredResult 이미 완료됨 (타임아웃) - Order ID: {}", event.getOrderId());
             pendingApprovals.remove(event.getOrderId());
+            pendingAuthentications.remove(event.getOrderId());
         }
     }
 
@@ -613,20 +657,45 @@ public class OrderService {
 
         // 트랜잭션 커밋 후 DeferredResult 완료 (TransactionSynchronization 사용)
         DeferredResult<ResponseEntity<?>> deferredResult = pendingApprovals.get(event.getOrderId());
+        Authentication savedAuthentication = pendingAuthentications.get(event.getOrderId());
+        
         if (deferredResult != null && !deferredResult.isSetOrExpired()) {
+            // afterCommit()는 트랜잭션 스레드(Kafka Consumer)에서 실행되므로 즉시 완료 가능
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    // 트랜잭션 커밋 후 DeferredResult 완료
-                    pendingApprovals.remove(event.getOrderId());
-                    deferredResult.setResult(ApiResponse.success(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, OrderStatus.ORDER_COMPLETED));
-                    log.info("트랜잭션 커밋 후 DeferredResult 완료 - Order ID: {}, Status: ORDER_COMPLETED (실패 후 복원)", 
-                            event.getOrderId());
+                    try {
+                        // SecurityContext 복원 (DeferredResult 완료 시 필요)
+                        if (savedAuthentication != null) {
+                            SecurityContextHolder.getContext().setAuthentication(savedAuthentication);
+                            log.debug("SecurityContext 복원 - Order ID: {}, Authentication: {}", 
+                                    event.getOrderId(), savedAuthentication.getName());
+                        }
+                        
+                        // 트랜잭션 커밋 후 즉시 DeferredResult 완료
+                        pendingApprovals.remove(event.getOrderId());
+                        pendingAuthentications.remove(event.getOrderId());
+                        
+                        // ResponseEntity를 직접 반환
+                        ResponseEntity<?> response = ApiResponse.success(
+                                SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, 
+                                OrderStatus.ORDER_COMPLETED
+                        );
+                        deferredResult.setResult(response);
+                        
+                        log.info("트랜잭션 커밋 후 DeferredResult 완료 - Order ID: {}, Status: ORDER_COMPLETED (실패 후 복원)", 
+                                event.getOrderId());
+                        
+                    } finally {
+                        // SecurityContext 정리
+                        SecurityContextHolder.clearContext();
+                    }
                 }
             });
         } else if (deferredResult != null) {
             log.info("DeferredResult 이미 완료됨 (타임아웃) - Order ID: {}", event.getOrderId());
             pendingApprovals.remove(event.getOrderId());
+            pendingAuthentications.remove(event.getOrderId());
         }
     }
 
