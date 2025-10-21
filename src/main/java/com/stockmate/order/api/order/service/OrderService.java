@@ -8,6 +8,7 @@ import com.stockmate.order.api.order.repository.OrderRepository;
 import com.stockmate.order.common.config.security.Role;
 import com.stockmate.order.common.config.security.SecurityUser;
 import com.stockmate.order.common.exception.BadRequestException;
+import com.stockmate.order.common.exception.BaseException;
 import com.stockmate.order.common.exception.NotFoundException;
 import com.stockmate.order.common.response.ErrorStatus;
 import lombok.RequiredArgsConstructor;
@@ -450,6 +451,19 @@ public class OrderService {
             // 상태 변경을 별도 트랜잭션으로 먼저 커밋 (REQUIRES_NEW) - Self-Invocation 해결
             orderTransactionService.updateOrderStatusToApproval(orderId, approvalAttemptId);
 
+        } catch (BadRequestException e) {
+            // 상태 검증 실패 (이미 PENDING_APPROVAL 등) - 즉시 에러 응답
+            log.error("주문 상태 변경 실패 - Order ID: {}, 에러: {}", orderId, e.getMessage());
+            deferredResult.setErrorResult(e);
+            return deferredResult;
+        } catch (NotFoundException e) {
+            // 주문을 찾을 수 없음 - 즉시 에러 응답
+            log.error("주문을 찾을 수 없음 - Order ID: {}", orderId);
+            deferredResult.setErrorResult(e);
+            return deferredResult;
+        }
+
+        try {
             // DB 커밋 이후 OrderItems와 함께 로드 (LazyInitializationException 방지)
             Order order = orderRepository.findByIdWithItems(orderId)
                     .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
@@ -478,11 +492,11 @@ public class OrderService {
                     orderId, approvalAttemptId, APPROVAL_TIMEOUT_MILLIS);
 
         } catch (Exception e) {
-            // Kafka 발행 실패 시 보상 트랜잭션 (주문 상태 복원)
-            log.error("Kafka 이벤트 발행 실패 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
+            // Kafka 발행 실패 또는 기타 에러 - 보상 트랜잭션 후 에러 응답
+            log.error("Kafka 이벤트 발행 실패 또는 처리 중 에러 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
             orderTransactionService.rollbackOrderToCompleted(orderId);
             pendingApprovals.remove(orderId);
-            deferredResult.setErrorResult(new BadRequestException("주문 승인 요청 중 오류가 발생했습니다. 다시 시도해주세요."));
+            deferredResult.setErrorResult(e instanceof BaseException ? e : new BadRequestException("주문 승인 요청 중 오류가 발생했습니다."));
         }
 
         return deferredResult; // 서블릿 스레드 즉시 반환
