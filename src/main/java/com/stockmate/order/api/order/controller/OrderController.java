@@ -79,63 +79,25 @@ public class OrderController {
         log.info("주문 승인 요청 (비동기) - Order ID: {}, 요청자 ID: {}, 요청자 Role: {}", 
                 orderId, securityUser.getMemberId(), securityUser.getRole());
 
-        // DeferredResult 생성 (타임아웃 10초)
+        // DeferredResult 생성 (타임아웃 10초) - Controller에서 생성
         DeferredResult<ResponseEntity<?>> result = new DeferredResult<>(10000L);
 
-        try {
-            // Service에서 반환한 DeferredResult를 래핑
-            DeferredResult<OrderStatus> serviceDeferredResult = orderService.requestOrderApproval(orderId, securityUser.getRole());
+        // 타임아웃 콜백
+        result.onTimeout(() -> {
+            log.warn("DeferredResult 타임아웃 - Order ID: {}", orderId);
+            result.setResult(ApiResponse.success(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, OrderStatus.PENDING_APPROVAL));
+        });
 
-            // Service의 DeferredResult가 완료되면 Controller의 DeferredResult도 완료
-            serviceDeferredResult.onCompletion(() -> {
-                OrderStatus status = (OrderStatus) serviceDeferredResult.getResult();
-                if (status != null) {
-                    result.setResult(ApiResponse.success(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, status));
-                    log.info("주문 승인 요청 완료 (비동기 응답) - Order ID: {}, Final Status: {}", orderId, status);
-                }
-            });
+        // 완료 콜백
+        result.onCompletion(() -> {
+            log.info("DeferredResult 완료 콜백 실행 - Order ID: {}", orderId);
+        });
 
-            serviceDeferredResult.onTimeout(() -> {
-                result.setResult(ApiResponse.success(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, OrderStatus.PENDING_APPROVAL));
-                log.warn("주문 승인 요청 타임아웃 (비동기 응답) - Order ID: {}", orderId);
-            });
-
-            serviceDeferredResult.onError((throwable) -> {
-                log.error("주문 승인 요청 에러 (비동기 응답) - Order ID: {}, 에러: {}", orderId, throwable.getMessage());
-                
-                if (throwable instanceof BadRequestException) {
-                    BadRequestException ex = (BadRequestException) throwable;
-                    result.setResult(ResponseEntity.status(ex.getStatusCode())
-                            .body(ApiResponse.fail(ex.getStatusCode(), ex.getMessage())));
-                } else if (throwable instanceof NotFoundException) {
-                    NotFoundException ex = (NotFoundException) throwable;
-                    result.setResult(ResponseEntity.status(ex.getStatusCode())
-                            .body(ApiResponse.fail(ex.getStatusCode(), ex.getMessage())));
-                } else {
-                    result.setResult(ResponseEntity.status(500)
-                            .body(ApiResponse.fail(500, "주문 승인 처리 중 오류가 발생했습니다.")));
-                }
-            });
-
-            log.info("주문 승인 요청 접수 완료, 서블릿 스레드 해제 - Order ID: {}", orderId);
-            
-        } catch (Exception e) {
-            // Service 호출 중 즉시 발생한 예외 처리
-            log.error("주문 승인 요청 중 즉시 예외 발생 - Order ID: {}, 에러: {}", orderId, e.getMessage());
-            
-            if (e instanceof BadRequestException) {
-                BadRequestException ex = (BadRequestException) e;
-                result.setResult(ResponseEntity.status(ex.getStatusCode())
-                        .body(ApiResponse.fail(ex.getStatusCode(), ex.getMessage())));
-            } else if (e instanceof NotFoundException) {
-                NotFoundException ex = (NotFoundException) e;
-                result.setResult(ResponseEntity.status(ex.getStatusCode())
-                        .body(ApiResponse.fail(ex.getStatusCode(), ex.getMessage())));
-            } else {
-                result.setResult(ResponseEntity.status(500)
-                        .body(ApiResponse.fail(500, "주문 승인 처리 중 오류가 발생했습니다.")));
-            }
-        }
+        // Service 호출 (Controller의 DeferredResult를 전달)
+        // Service에서 비동기로 처리하고 DeferredResult를 완료시킴
+        orderService.requestOrderApprovalAsync(orderId, securityUser.getRole(), result);
+        
+        log.info("주문 승인 요청 접수 완료, 서블릿 스레드 해제 - Order ID: {}", orderId);
         
         return result;
     }
