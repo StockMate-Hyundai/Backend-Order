@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.async.DeferredResult;
 
 import java.time.LocalDate;
 
@@ -32,20 +33,6 @@ public class OrderController {
 
         orderService.makeOrder(orderRequestDTO, securityUser.getMemberId());
         return ApiResponse.success_only(SuccessStatus.SEND_PARTS_ORDER_SUCCESS);
-    }
-
-    @Operation(summary = "주문 승인 요청 API", description = "주문을 승인하고 재고 차감을 요청합니다. (ADMIN/SUPER_ADMIN만 가능)")
-    @PutMapping("/{orderId}/approve")
-    public ResponseEntity<ApiResponse<Void>> approveOrder(@PathVariable Long orderId, @AuthenticationPrincipal SecurityUser securityUser) {
-        
-        log.info("주문 승인 요청 - Order ID: {}, 요청자 ID: {}, 요청자 Role: {}", 
-                orderId, securityUser.getMemberId(), securityUser.getRole());
-
-        orderService.requestOrderApproval(orderId, securityUser.getRole());
-        
-        log.info("주문 승인 요청 완료 - Order ID: {} (재고 차감 처리 중)", orderId);
-        
-        return ApiResponse.success_only(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS);
     }
 
     @Operation(summary = "주문 취소 API", description = "생성한 주문을 취소합니다. (본인 주문 또는 ADMIN/SUPER_ADMIN)")
@@ -83,18 +70,43 @@ public class OrderController {
         return ApiResponse.success_only(SuccessStatus.SEND_ORDER_REJECT_REQUEST_SUCCESS);
     }
 
-    @Operation(summary = "주문 승인 요청 API", description = "주문을 승인합니다. (ADMIN/SUPER_ADMIN만 가능)")
+    @Operation(summary = "주문 승인 요청 API", description = "주문을 승인하고 최종 결과를 비동기로 반환합니다. 최대 10초 대기하며, 타임아웃 시 PENDING_APPROVAL 상태를 반환합니다. 서블릿 스레드는 즉시 해제됩니다. (ADMIN/SUPER_ADMIN만 가능)")
     @PutMapping("/approve")
-    public ResponseEntity<ApiResponse<Void>> requestOrderApproval(@RequestParam Long orderId, @AuthenticationPrincipal SecurityUser securityUser) {
+    public DeferredResult<ResponseEntity<ApiResponse<OrderStatus>>> requestOrderApproval(
+            @RequestParam Long orderId, 
+            @AuthenticationPrincipal SecurityUser securityUser) {
         
-        log.info("주문 승인 요청 - Order ID: {}, 요청자 ID: {}, 요청자 Role: {}", 
+        log.info("주문 승인 요청 (비동기) - Order ID: {}, 요청자 ID: {}, 요청자 Role: {}", 
                 orderId, securityUser.getMemberId(), securityUser.getRole());
 
-        orderService.requestOrderApproval(orderId, securityUser.getRole());
+        // DeferredResult 생성 (타임아웃 10초)
+        DeferredResult<ResponseEntity<ApiResponse<OrderStatus>>> result = new DeferredResult<>(10000L);
+
+        // Service에서 반환한 DeferredResult를 래핑
+        DeferredResult<OrderStatus> serviceDeferredResult = orderService.requestOrderApproval(orderId, securityUser.getRole());
+
+        // Service의 DeferredResult가 완료되면 Controller의 DeferredResult도 완료
+        serviceDeferredResult.onCompletion(() -> {
+            OrderStatus status = (OrderStatus) serviceDeferredResult.getResult();
+            if (status != null) {
+                result.setResult(ApiResponse.success(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, status));
+                log.info("주문 승인 요청 완료 (비동기 응답) - Order ID: {}, Final Status: {}", orderId, status);
+            }
+        });
+
+        serviceDeferredResult.onTimeout(() -> {
+            result.setResult(ApiResponse.success(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS, OrderStatus.PENDING_APPROVAL));
+            log.warn("주문 승인 요청 타임아웃 (비동기 응답) - Order ID: {}", orderId);
+        });
+
+        serviceDeferredResult.onError((throwable) -> {
+            result.setErrorResult(throwable);
+            log.error("주문 승인 요청 에러 (비동기 응답) - Order ID: {}, 에러: {}", orderId, throwable.getMessage());
+        });
+
+        log.info("주문 승인 요청 접수 완료, 서블릿 스레드 해제 - Order ID: {}", orderId);
         
-        log.info("주문 승인 요청 완료 - Order ID: {}", orderId);
-        
-        return ApiResponse.success_only(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS);
+        return result;
     }
 
     @Operation(summary = "주문 승인 상태 체크 API", description = "주문의 현재 상태를 확인합니다. (본인 주문 또는 ADMIN/SUPER_ADMIN)")
