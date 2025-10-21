@@ -377,6 +377,36 @@ public class OrderService {
         return response;
     }
 
+    // 주문 반려
+    @Transactional
+    public void requestOrderReject(OrderRejectRequestDTO orderRejectRequestDTO, Role role) {
+        log.info("주문 반려 요청 - Order ID: {}, Role: {}", orderRejectRequestDTO.getOrderId(), role);
+
+        // 권한 체크 (ADMIN, SUPER_ADMIN만 가능)
+        if (role != Role.ADMIN && role != Role.SUPER_ADMIN) {
+            log.error("권한 부족 - Role: {}", role);
+            throw new BadRequestException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
+        }
+
+        Order order = orderRepository.findById(orderRejectRequestDTO.getOrderId())
+                .orElseThrow(() -> {
+                    log.error("주문을 찾을 수 없음 - Order ID: {}", orderRejectRequestDTO.getOrderId());
+                    return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
+                });
+
+        // 주문 상태 확인 (ORDER_COMPLETED만 승인 가능)
+        if (order.getOrderStatus() != OrderStatus.ORDER_COMPLETED) {
+            log.warn("승인 불가능한 상태 - Order ID: {}, Status: {}", orderRejectRequestDTO.getOrderId(), order.getOrderStatus());
+            throw new BadRequestException(ErrorStatus.INVALID_ORDER_STATUS_FOR_APPROVAL.getMessage());
+        }
+
+        // 주문 상태를 REJECTED 변경
+        order.reject(orderRejectRequestDTO.getReason());
+        orderRepository.save(order);
+
+        log.info("주문 반려 완료 - Order ID: {}, Order Number: {}, Status: REJECTED", orderRejectRequestDTO.getOrderId(), order.getOrderNumber());
+    }
+
     // 주문 승인 요청
     @Transactional
     public void requestOrderApproval(Long orderId, Role role) {

@@ -20,6 +20,7 @@ public enum SuccessStatus {
     SEND_MY_ORDER_LIST_SUCCESS(HttpStatus.OK, "내 주문 리스트 조회 성공"),
     SEND_ORDER_LIST_SUCCESS(HttpStatus.OK, "주문 리스트 조회 성공"),
     SEND_ORDER_DETAIL_SUCCESS(HttpStatus.OK, "주문 상세 조회 성공"),
+    SEND_ORDER_REJECT_REQUEST_SUCCESS(HttpStatus.OK,"주문 반려 성공"),
 
     /**
      * 201
