@@ -50,6 +50,14 @@ public class ApiResponse<T> {
                 .build();
     }
 
+    public static <T> ApiResponse<T> fail_generic(int status, String message) {
+        return ApiResponse.<T>builder()
+                .status(status)
+                .success(false)
+                .message(message)
+                .build();
+    }
+
     public static <T> ApiResponse<T> fail_with_data(int status, String message, T data) {
         return ApiResponse.<T>builder()
                 .status(status)
