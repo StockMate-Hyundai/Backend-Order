@@ -64,15 +64,16 @@ public class OrderService {
 
         // 주문 생성
         Order order = Order.builder()
-                .memberId(memberId)
-                .etc(orderRequestDTO.getEtc())
-                .requestedShippingDate(orderRequestDTO.getRequestedShippingDate())
                 .totalPrice(checkResult.getTotalPrice())
-                .orderStatus(OrderStatus.ORDER_COMPLETED)
-                .rejectedMessage(null)
+                .paymentType(orderRequestDTO.getPaymentType())
+                .requestedShippingDate(orderRequestDTO.getRequestedShippingDate())
+                .shippingDate(null)
                 .carrier(null)
                 .trackingNumber(null)
-                .shippingDate(null)
+                .rejectedMessage(null)
+                .orderStatus(OrderStatus.ORDER_COMPLETED)
+                .etc(orderRequestDTO.getEtc())
+                .memberId(memberId)
                 .orderItems(new ArrayList<>())
                 .build();
 
@@ -96,13 +97,21 @@ public class OrderService {
                 .build();
         Order finalOrder = orderRepository.save(updatedOrder);
 
-        log.info("부품 발주 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}", 
-                finalOrder.getOrderId(), finalOrder.getOrderNumber(), finalOrder.getMemberId(), 
-                finalOrder.getOrderItems().size(), checkResult.getTotalPrice(), 
-                finalOrder.getOrderStatus());
+        PayRequestEvent payRequestEvent = PayRequestEvent.builder()
+                .orderId(finalOrder.getOrderId())
+                .orderNumber(finalOrder.getOrderNumber())
+                .totalPrice(finalOrder.getTotalPrice())
+                .build();
 
-        // TODO: 추후 결제 서버에 totalPrice 전송
-        // paymentService.processPayment(checkResult.getTotalPrice(), savedOrder.getOrderId());
+        kafkaProducerService.sendPayRequest(payRequestEvent);
+
+        log.info("결제 요청 이벤트 발송 완료 - Order ID: {}, 금액: {}",
+                finalOrder.getOrderId(), finalOrder.getTotalPrice());
+
+        log.info("부품 발주 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}",
+                finalOrder.getOrderId(), finalOrder.getOrderNumber(), finalOrder.getMemberId(),
+                finalOrder.getOrderItems().size(), checkResult.getTotalPrice(),
+                finalOrder.getOrderStatus());
     }
 
     // 주문 취소

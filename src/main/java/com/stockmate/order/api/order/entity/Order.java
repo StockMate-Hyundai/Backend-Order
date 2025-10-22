@@ -28,28 +28,32 @@ public class Order extends BaseTimeEntity {
     @Column(name = "order_number", unique = true)
     private String orderNumber;
 
-    @Column(name = "member_id", nullable = false)
-    private Long memberId;
+    private int totalPrice; // 총 주문 금액
 
-    private String etc; // 주문 추가 설명
-    private String rejectedMessage; // 반려 메세지
-    private String carrier; // 택배 회사 이름
-    private String trackingNumber; // 운송장 번호
+    private PaymentType paymentType; // 결제 방식
 
     private LocalDate requestedShippingDate; // 원하는 출고 일자
     private LocalDate shippingDate; // 실제 출고 일자
 
-    private int totalPrice; // 총 주문 금액
+    private String carrier; // 택배 회사 이름
+    private String trackingNumber; // 운송장 번호
+
+    private String rejectedMessage; // 반려 메세지
 
     @Enumerated(EnumType.STRING)
     @Column(name = "order_status", length = 50)
     private OrderStatus orderStatus;
+
+    private String etc; // 주문 추가 설명
 
     @Column(name = "approval_attempt_id")
     private String approvalAttemptId; // Saga 시도 식별자 (레이스 컨디션 방지)
 
     @Column(name = "approval_started_at")
     private LocalDateTime approvalStartedAt; // 승인 시작 시간 (장기 PENDING 방지용)
+
+    @Column(name = "member_id", nullable = false)
+    private Long memberId;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default

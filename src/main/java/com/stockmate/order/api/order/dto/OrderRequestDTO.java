@@ -1,5 +1,6 @@
 package com.stockmate.order.api.order.dto;
 
+import com.stockmate.order.api.order.entity.PaymentType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -16,5 +17,6 @@ public class OrderRequestDTO {
 
     private List<OrderItemRequestDTO> orderItems;
     private LocalDate requestedShippingDate;
+    private PaymentType paymentType;
     private String etc;
 }
