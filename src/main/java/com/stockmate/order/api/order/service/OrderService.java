@@ -83,9 +83,6 @@ public class OrderService {
                 .build();
         Order finalOrder = orderRepository.save(updatedOrder);
 
-        log.info("부품 발주 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}",
-                finalOrder.getOrderId(), finalOrder.getOrderNumber(), finalOrder.getMemberId(),
-                finalOrder.getOrderItems().size(), checkResult.getTotalPrice(),
         PayRequestEvent payRequestEvent = PayRequestEvent.builder()
                 .orderId(finalOrder.getOrderId())
                 .orderNumber(finalOrder.getOrderNumber())
@@ -96,11 +93,11 @@ public class OrderService {
 
         log.info("결제 요청 이벤트 발송 완료 - Order ID: {}, 금액: {}",
                 finalOrder.getOrderId(), finalOrder.getTotalPrice());
-
         log.info("부품 발주 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}",
                 finalOrder.getOrderId(), finalOrder.getOrderNumber(), finalOrder.getMemberId(),
                 finalOrder.getOrderItems().size(), checkResult.getTotalPrice(),
-                finalOrder.getOrderStatus());
+                finalOrder.getOrderStatus()
+        );
     }
 
     @Transactional
@@ -295,7 +292,7 @@ public class OrderService {
         order.registerShipping(carrier, trackingNumber);
         orderRepository.save(order);
 
-        log.info("배송 등록 완료 - Order Number: {}, Carrier: {}, Tracking Number: {}", 
+        log.info("배송 등록 완료 - Order Number: {}, Carrier: {}, Tracking Number: {}",
                 requestDTO.getOrderNumber(), carrier, trackingNumber);
 
         return ShippingRegistrationResponseDTO.builder()
@@ -489,11 +486,11 @@ public class OrderService {
 
             // WebSocket으로 상태 업데이트 전송 (요청자에게만)
             orderWebSocketHandler.sendToUser(
-                    userId, 
-                    orderId, 
-                    OrderStatus.PENDING_APPROVAL, 
-                    "STOCK_DEDUCTION", 
-                    "재고 차감을 요청합니다.", 
+                    userId,
+                    orderId,
+                    OrderStatus.PENDING_APPROVAL,
+                    "STOCK_DEDUCTION",
+                    "재고 차감을 요청합니다.",
                     null
             );
 
@@ -521,29 +518,29 @@ public class OrderService {
                 log.info("재고 차감 요청 이벤트 발행 완료 - Order ID: {}, Attempt ID: {}", orderId, approvalAttemptId);
             } catch (Exception e) {
                 log.error("Kafka 이벤트 발행 실패 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
-                
+
                 // Kafka 발행 실패 시 롤백
                 orderTransactionService.rollbackOrderToCompleted(orderId);
-                
+
                 // WebSocket으로 실패 알림
                 orderWebSocketHandler.sendOrderStatusUpdate(
-                        orderId, 
-                        OrderStatus.ORDER_COMPLETED, 
-                        "ERROR", 
-                        "주문 승인 처리 중 오류가 발생했습니다.", 
+                        orderId,
+                        OrderStatus.ORDER_COMPLETED,
+                        "ERROR",
+                        "주문 승인 처리 중 오류가 발생했습니다.",
                         null
                 );
             }
 
         } catch (Exception e) {
             log.error("WebSocket 주문 승인 처리 중 오류 발생 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
-            
+
             // WebSocket으로 에러 알림
             orderWebSocketHandler.sendOrderStatusUpdate(
-                    orderId, 
-                    OrderStatus.REJECTED, 
-                    "ERROR", 
-                    "주문 승인 처리 중 오류가 발생했습니다: " + e.getMessage(), 
+                    orderId,
+                    OrderStatus.REJECTED,
+                    "ERROR",
+                    "주문 승인 처리 중 오류가 발생했습니다: " + e.getMessage(),
                     null
             );
         }
@@ -552,7 +549,7 @@ public class OrderService {
     // WebSocket 기반 재고 차감 성공 처리
     @Transactional
     public void handleStockDeductionSuccessWebSocket(StockDeductionSuccessEvent event) {
-        log.info("=== WebSocket 재고 차감 성공 처리 시작 === Order ID: {}, Attempt ID: {}", 
+        log.info("=== WebSocket 재고 차감 성공 처리 시작 === Order ID: {}, Attempt ID: {}",
                 event.getOrderId(), event.getApprovalAttemptId());
 
         try {
@@ -574,15 +571,15 @@ public class OrderService {
             order.approve();
             orderRepository.save(order);
 
-            log.info("=== WebSocket 주문 승인 완료 === Order ID: {}, Status: {}", 
+            log.info("=== WebSocket 주문 승인 완료 === Order ID: {}, Status: {}",
                     event.getOrderId(), order.getOrderStatus());
 
             // WebSocket으로 성공 알림
             orderWebSocketHandler.sendOrderStatusUpdate(
-                    event.getOrderId(), 
-                    OrderStatus.PENDING_SHIPPING, 
-                    "COMPLETED", 
-                    "주문 승인이 완료되었습니다.", 
+                    event.getOrderId(),
+                    OrderStatus.PENDING_SHIPPING,
+                    "COMPLETED",
+                    "주문 승인이 완료되었습니다.",
                     null
             );
 
@@ -594,7 +591,7 @@ public class OrderService {
     // WebSocket 기반 재고 차감 실패 처리
     @Transactional
     public void handleStockDeductionFailedWebSocket(StockDeductionFailedEvent event) {
-        log.info("=== WebSocket 재고 차감 실패 처리 시작 === Order ID: {}, Attempt ID: {}", 
+        log.info("=== WebSocket 재고 차감 실패 처리 시작 === Order ID: {}, Attempt ID: {}",
                 event.getOrderId(), event.getApprovalAttemptId());
 
         try {
@@ -619,15 +616,15 @@ public class OrderService {
 
             // WebSocket으로 실패 알림
             orderWebSocketHandler.sendOrderStatusUpdate(
-                    event.getOrderId(), 
-                    OrderStatus.ORDER_COMPLETED, 
-                    "FAILED", 
-                    "재고 부족으로 주문 승인이 실패했습니다.", 
+                    event.getOrderId(),
+                    OrderStatus.ORDER_COMPLETED,
+                    "FAILED",
+                    "재고 부족으로 주문 승인이 실패했습니다.",
                     event.getData()
             );
 
         } catch (Exception e) {
-            log.error("WebSocket 재고 차감 실패 처리 중 오류 발생 - Order ID: {}, 에러: {}", 
+            log.error("WebSocket 재고 차감 실패 처리 중 오류 발생 - Order ID: {}, 에러: {}",
                     event.getOrderId(), e.getMessage(), e);
         }
     }
