@@ -30,7 +30,7 @@ public class CartController {
         CartResponseDTO response = cartService.addToCart(addToCartRequestDTO, securityUser.getMemberId());
 
         log.info("장바구니 아이템 추가 완료 - Cart ID: {}, 총 아이템 수: {}", response.getCartId(), response.getItems().size());
-        return ApiResponse.success(SuccessStatus.SEND_PARTS_ORDER_SUCCESS, response);
+        return ApiResponse.success(SuccessStatus.SEND_CART_CREATE_SUCCESS, response);
     }
 
     @Operation(summary = "장바구니 수정 API", description = "장바구니를 수정합니다. 기존 데이터와 비교하여 추가/삭제/수정을 처리합니다.")
