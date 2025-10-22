@@ -21,11 +21,15 @@ public enum SuccessStatus {
     SEND_ORDER_LIST_SUCCESS(HttpStatus.OK, "주문 리스트 조회 성공"),
     SEND_ORDER_DETAIL_SUCCESS(HttpStatus.OK, "주문 상세 조회 성공"),
     SEND_ORDER_REJECT_REQUEST_SUCCESS(HttpStatus.OK,"주문 반려 성공"),
+    SEND_CART_MODIFY_SUCCESS(HttpStatus.OK,"장바구니 수정 성공"),
+    SEND_CART_DELETE_SUCCESS(HttpStatus.OK,"장바구니 삭제 성공"),
+    SEND_CART_DATA_SUCCESS(HttpStatus.OK,"장바구니 조회 성공"),
 
     /**
      * 201
      */
     SEND_PARTS_ORDER_SUCCESS(HttpStatus.CREATED,"부품 주문 성공"),
+    SEND_CART_CREATE_SUCCESS(HttpStatus.CREATED, "장바구니 생성 성공"),
 
     ;
 

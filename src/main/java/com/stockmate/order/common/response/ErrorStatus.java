@@ -3,6 +3,7 @@ package com.stockmate.order.common.response;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.graphql.GraphQlProperties;
 import org.springframework.http.HttpStatus;
 
 @Getter
@@ -21,6 +22,8 @@ public enum ErrorStatus {
     INVALID_ORDER_STATUS_FOR_APPROVAL(HttpStatus.BAD_REQUEST,"주문 완료 상태만 승인할 수 있습니다."),
     PARTS_SERVER_UNAVAILABLE_EXCEPTION(HttpStatus.SERVICE_UNAVAILABLE,"부품 서버가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해주세요."),
     USER_SERVER_UNAVAILABLE_EXCEPTION(HttpStatus.SERVICE_UNAVAILABLE,"사용자 서버가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해주세요."),
+    CART_EMPTY_EXCEPTION(HttpStatus.BAD_REQUEST,"장바구니가 비어있습니다."),
+    CART_AMOUNT_1_OVER_EXCEPTION(HttpStatus.BAD_REQUEST,"장바구니 수량은 1개 이상이어야 합니다."),
 
     /**
      * 401 UNAUTHORIZED
