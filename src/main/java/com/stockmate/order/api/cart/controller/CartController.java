@@ -22,14 +22,14 @@ public class CartController {
 
     private final CartService cartService;
 
-    @Operation(summary = "장바구니 등록 API", description = "장바구니에 부품을 추가합니다.")
+    @Operation(summary = "장바구니 등록 API", description = "장바구니를 등록합니다. 이미 장바구니가 존재하면 기존 장바구니 ID를 반환합니다.")
     @PostMapping("/cart")
     public ResponseEntity<ApiResponse<CartResponseDTO>> addToCart(@RequestBody AddToCartRequestDTO addToCartRequestDTO, @AuthenticationPrincipal SecurityUser securityUser) {
 
-        log.info("장바구니 아이템 추가 요청 - Member ID: {}, 아이템 수: {}", securityUser.getMemberId(), addToCartRequestDTO.getItems().size());
+        log.info("장바구니 등록 요청 - Member ID: {}, 아이템 수: {}", securityUser.getMemberId(), addToCartRequestDTO.getItems().size());
         CartResponseDTO response = cartService.addToCart(addToCartRequestDTO, securityUser.getMemberId());
 
-        log.info("장바구니 아이템 추가 완료 - Cart ID: {}, 총 아이템 수: {}", response.getCartId(), response.getItems().size());
+        log.info("장바구니 등록 완료 - Cart ID: {}, 총 아이템 수: {}", response.getCartId(), response.getItems().size());
         return ApiResponse.success(SuccessStatus.SEND_CART_CREATE_SUCCESS, response);
     }
 

@@ -11,6 +11,7 @@ import org.springframework.security.config.annotation.web.configurers.HeadersCon
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
@@ -47,9 +48,11 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/v1/order/health-check"
                         ).permitAll()
+                        .requestMatchers(
+                                "/ws/**"
+                        ).permitAll() // WebSocket 경로 허용
                         .anyRequest().authenticated()
                 );
-
         return http.build();
     }
 }

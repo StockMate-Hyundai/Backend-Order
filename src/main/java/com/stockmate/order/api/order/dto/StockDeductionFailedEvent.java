@@ -14,4 +14,5 @@ public class StockDeductionFailedEvent {
     private String orderNumber;
     private String approvalAttemptId; // Saga 시도 식별자
     private String reason;
+    private Object data; // 추가 데이터 (실패 상세 정보 등)
 }

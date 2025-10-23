@@ -33,7 +33,7 @@ public class StockDeductionFailedConsumer {
         log.info("재고 차감 실패 이벤트 수신 - 토픽: {}, 파티션: {}, 오프셋: {}, Order ID: {}, Order Number: {}, Reason: {}", 
                 topic, partition, offset, event.getOrderId(), event.getOrderNumber(), event.getReason());
 
-        orderService.handleStockDeductionFailed(event);
+        orderService.handleStockDeductionFailedWebSocket(event);
         acknowledgment.acknowledge();
         
         log.info("재고 차감 실패 이벤트 처리 완료 (주문 상태를 ORDER_COMPLETED로 되돌림) - Order ID: {}", event.getOrderId());
