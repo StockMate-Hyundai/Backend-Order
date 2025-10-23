@@ -33,7 +33,7 @@ public class StockDeductionSuccessConsumer {
         log.info("재고 차감 성공 이벤트 수신 - 토픽: {}, 파티션: {}, 오프셋: {}, Order ID: {}, Order Number: {}", 
                 topic, partition, offset, event.getOrderId(), event.getOrderNumber());
 
-        orderService.handleStockDeductionSuccess(event);
+        orderService.handleStockDeductionSuccessWebSocket(event);
         acknowledgment.acknowledge();
         
         log.info("재고 차감 성공 이벤트 처리 완료 - Order ID: {}", event.getOrderId());
