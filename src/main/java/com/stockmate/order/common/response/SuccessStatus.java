@@ -24,6 +24,7 @@ public enum SuccessStatus {
     SEND_CART_MODIFY_SUCCESS(HttpStatus.OK,"장바구니 수정 성공"),
     SEND_CART_DELETE_SUCCESS(HttpStatus.OK,"장바구니 삭제 성공"),
     SEND_CART_DATA_SUCCESS(HttpStatus.OK,"장바구니 조회 성공"),
+    REGISTER_SHIPPING_SUCCESS(HttpStatus.OK,"배송 등록 성공"),
 
     /**
      * 201

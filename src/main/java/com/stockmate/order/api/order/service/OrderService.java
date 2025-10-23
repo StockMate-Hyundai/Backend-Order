@@ -11,23 +11,17 @@ import com.stockmate.order.common.config.security.SecurityUser;
 import com.stockmate.order.common.exception.BadRequestException;
 import com.stockmate.order.common.exception.NotFoundException;
 import com.stockmate.order.common.exception.UnauthorizedException;
-import com.stockmate.order.common.response.ApiResponse;
 import com.stockmate.order.common.response.ErrorStatus;
-import com.stockmate.order.common.response.SuccessStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -272,6 +266,56 @@ public class OrderService {
                 .build();
     }
 
+    // 배송 등록
+    @Transactional
+    public ShippingRegistrationResponseDTO registerShipping(ShippingRegistrationRequestDTO requestDTO, Role role) {
+        log.info("배송 등록 요청 - Order Number: {}, 요청자 Role: {}", requestDTO.getOrderNumber(), role);
+
+        // 권한 확인: WAREHOUSE만 배송 등록 가능
+        if (role != Role.WAREHOUSE) {
+            log.error("권한 부족 - Role: {}", role);
+            throw new UnauthorizedException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
+        }
+
+        // 주문 조회
+        Order order = orderRepository.findByOrderNumber(requestDTO.getOrderNumber())
+                .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
+
+        // 주문 상태 확인 (출고 대기 상태만 배송 등록 가능)
+        if (order.getOrderStatus() != OrderStatus.PENDING_SHIPPING) {
+            log.warn("배송 등록 불가능한 상태 - Order Number: {}, Status: {}", requestDTO.getOrderNumber(), order.getOrderStatus());
+            throw new BadRequestException(ErrorStatus.INVALID_ORDER_STATUS_FOR_SHIPPING.getMessage());
+        }
+
+        // 배송 정보 생성
+        String carrier = "현대글로비스";
+        String trackingNumber = generateTrackingNumber();
+
+        // 배송 등록
+        order.registerShipping(carrier, trackingNumber);
+        orderRepository.save(order);
+
+        log.info("배송 등록 완료 - Order Number: {}, Carrier: {}, Tracking Number: {}", 
+                requestDTO.getOrderNumber(), carrier, trackingNumber);
+
+        return ShippingRegistrationResponseDTO.builder()
+                .orderId(order.getOrderId())
+                .orderNumber(order.getOrderNumber())
+                .carrier(carrier)
+                .trackingNumber(trackingNumber)
+                .shippingDate(order.getShippingDate())
+                .build();
+    }
+
+    // 운송장 번호 생성 (13자리 랜덤 숫자)
+    private String generateTrackingNumber() {
+        StringBuilder trackingNumber = new StringBuilder();
+        for (int i = 0; i < 13; i++) {
+            trackingNumber.append((int) (Math.random() * 10));
+        }
+        return trackingNumber.toString();
+    }
+
     @Transactional(readOnly = true)
     public OrderDetailResponseDTO getOrderDetail(Long orderId, Long memberId, Role role) {
         log.info("주문 상세 조회 - Order ID: {}, 요청자 Member ID: {}, Role: {}", orderId, memberId, role);
@@ -453,11 +497,11 @@ public class OrderService {
                     null
             );
 
-            // 5. OrderItems와 함께 로드 (LazyInitializationException 방지)
+            // OrderItems와 함께 로드 (LazyInitializationException 방지)
             Order orderWithItems = orderRepository.findByIdWithItems(orderId)
                     .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
 
-            // 6. 재고 차감 요청 이벤트 생성
+            // 재고 차감 요청 이벤트 생성
             List<StockDeductionRequestEvent.StockDeductionItem> items = orderWithItems.getOrderItems().stream()
                     .map(item -> StockDeductionRequestEvent.StockDeductionItem.builder()
                             .partId(item.getPartId())
@@ -471,7 +515,7 @@ public class OrderService {
                     .items(items)
                     .build();
 
-            // 7. Kafka 이벤트 발행
+            // Kafka 이벤트 발행
             try {
                 kafkaProducerService.sendStockDeductionRequest(event);
                 log.info("재고 차감 요청 이벤트 발행 완료 - Order ID: {}, Attempt ID: {}", orderId, approvalAttemptId);
