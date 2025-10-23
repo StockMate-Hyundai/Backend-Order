@@ -70,43 +70,17 @@ public class OrderController {
         return ApiResponse.success_only(SuccessStatus.SEND_ORDER_REJECT_REQUEST_SUCCESS);
     }
 
-    @Operation(summary = "주문 승인 요청 API", description = "주문을 승인하고 최종 결과를 비동기로 반환합니다. 최대 60초 대기하며, 타임아웃 시 상태 확인 API 안내 메시지를 반환합니다. (ADMIN/SUPER_ADMIN만 가능)")
+    @Operation(summary = "주문 승인 요청 API (WebSocket)", description = "주문 승인 처리를 시작합니다. WebSocket 연결을 통해 실시간으로 처리 상태를 받을 수 있습니다. (ADMIN/SUPER_ADMIN만 가능)")
     @PutMapping("/approve")
-    public DeferredResult<ResponseEntity<ApiResponse<OrderApprovalResponseDTO>>> requestOrderApproval(
-            @RequestParam Long orderId,
-            @AuthenticationPrincipal SecurityUser securityUser) {
+    public ResponseEntity<ApiResponse<Void>> requestOrderApproval(@RequestParam Long orderId, @AuthenticationPrincipal SecurityUser securityUser) {
 
-        log.info("주문 승인 요청 (비동기) - Order ID: {}, 요청자 ID: {}, 요청자 Role: {}",
-                orderId, securityUser.getMemberId(), securityUser.getRole());
+        log.info("주문 승인 요청 (WebSocket) - Order ID: {}, 요청자 ID: {}, 요청자 Role: {}", orderId, securityUser.getMemberId(), securityUser.getRole());
 
-        // DeferredResult 생성 (타임아웃 60초 - 대부분의 처리는 5초 내 완료)
-        DeferredResult<ResponseEntity<ApiResponse<OrderApprovalResponseDTO>>> result = new DeferredResult<>(60000L);
+        // 주문 승인 처리 시작 (WebSocket으로 결과 전송)
+        orderService.requestOrderApprovalWebSocket(orderId, securityUser.getRole(), securityUser.getMemberId());
+        log.info("주문 승인 요청 접수 완료 - Order ID: {}", orderId);
 
-        // 타임아웃 콜백: 60초 내에 응답이 없으면 상태 확인 안내
-        result.onTimeout(() -> {
-            log.warn("DeferredResult 타임아웃 - Order ID: {}, 백그라운드 처리는 계속됨", orderId);
-            ResponseEntity<ApiResponse<OrderApprovalResponseDTO>> response = ApiResponse.success(
-                    SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS,
-                    OrderApprovalResponseDTO.builder()
-                            .orderId(orderId)
-                            .currentStatus(OrderStatus.PENDING_APPROVAL)
-                            .message("승인 처리에 시간이 걸리고 있습니다. 상태 확인 API(/approval/status)로 결과를 확인해주세요.")
-                            .build()
-            );
-            result.setResult(response);
-        });
-
-        // 완료 콜백
-        result.onCompletion(() -> {
-            log.info("DeferredResult 완료 - Order ID: {}", orderId);
-        });
-
-        // Service 호출 (비동기 처리)
-        orderService.requestOrderApprovalAsync(orderId, securityUser.getRole(), result);
-
-        log.info("주문 승인 요청 접수 완료, 서블릿 스레드 해제 - Order ID: {}", orderId);
-
-        return result;
+        return ApiResponse.success_only(SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS);
     }
 
     @Operation(summary = "주문 승인 상태 체크 API", description = "주문의 현재 상태를 확인합니다. (본인 주문 또는 ADMIN/SUPER_ADMIN)")

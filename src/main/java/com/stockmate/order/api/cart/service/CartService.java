@@ -56,7 +56,7 @@ public class CartService {
             if (item.getAmount() <= 0) {
                 throw new BadRequestException(ErrorStatus.CART_AMOUNT_1_OVER_EXCEPTION.getMessage());
             }
-            
+
             // 이미 존재하는 부품인지 확인
             CartItem existingItem = cart.getCartItems().stream()
                     .filter(cartItem -> cartItem.getPartId().equals(item.getPartId()))
@@ -67,8 +67,8 @@ public class CartService {
                 // 이미 있으면 수량 추가
                 int newAmount = existingItem.getAmount() + item.getAmount();
                 existingItem.updateAmount(newAmount);
-                log.debug("장바구니 아이템 수량 추가 - Part ID: {}, 기존: {}, 추가: {}, 새 수량: {}", 
-                        item.getPartId(), existingItem.getAmount() - item.getAmount(), 
+                log.debug("장바구니 아이템 수량 추가 - Part ID: {}, 기존: {}, 추가: {}, 새 수량: {}",
+                        item.getPartId(), existingItem.getAmount() - item.getAmount(),
                         item.getAmount(), newAmount);
             } else {
                 // 없으면 새로 추가
@@ -78,7 +78,7 @@ public class CartService {
                         .amount(item.getAmount())
                         .build();
                 cart.getCartItems().add(newItem);
-                log.debug("장바구니 아이템 새로 추가 - Part ID: {}, Amount: {}", 
+                log.debug("장바구니 아이템 새로 추가 - Part ID: {}, Amount: {}",
                         item.getPartId(), item.getAmount());
             }
         });
@@ -135,13 +135,13 @@ public class CartService {
                 throw new BadRequestException(ErrorStatus.CART_AMOUNT_1_OVER_EXCEPTION.getMessage());
             }
             cart.addOrUpdateItem(item.getPartId(), item.getAmount());
-            log.debug("장바구니 아이템 추가/업데이트 - Part ID: {}, Amount: {}", 
+            log.debug("장바구니 아이템 추가/업데이트 - Part ID: {}, Amount: {}",
                     item.getPartId(), item.getAmount());
         });
 
         Cart savedCart = cartRepository.save(cart);
 
-        log.info("장바구니 전체 수정 완료 - Cart ID: {}, Member ID: {}, 총 아이템 수: {}", 
+        log.info("장바구니 전체 수정 완료 - Cart ID: {}, Member ID: {}, 총 아이템 수: {}",
                 savedCart.getCartId(), memberId, savedCart.getCartItems().size());
 
         return CartResponseDTO.from(savedCart);
@@ -179,7 +179,7 @@ public class CartService {
 
         for (CartItem cartItem : cart.getCartItems()) {
             PartDetailResponseDTO partDetail = partDetailsMap.get(cartItem.getPartId());
-            
+
             if (partDetail == null) {
                 log.warn("부품 정보를 찾을 수 없음 - Part ID: {}", cartItem.getPartId());
                 continue; // 부품 정보가 없으면 스킵
@@ -202,7 +202,7 @@ public class CartService {
             totalPrice += partDetail.getPrice() * cartItem.getAmount();
         }
 
-        log.info("장바구니 조회 완료 - Cart ID: {}, 아이템 수: {}, 총 금액: {}", 
+        log.info("장바구니 조회 완료 - Cart ID: {}, 아이템 수: {}, 총 금액: {}",
                 cart.getCartId(), itemDetails.size(), totalPrice);
 
         return CartDetailResponseDTO.builder()
@@ -227,4 +227,3 @@ public class CartService {
         log.info("장바구니 비우기 완료 - Member ID: {}", memberId);
     }
 }
-

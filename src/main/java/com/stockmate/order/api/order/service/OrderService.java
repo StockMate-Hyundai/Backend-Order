@@ -5,10 +5,12 @@ import com.stockmate.order.api.order.entity.Order;
 import com.stockmate.order.api.order.entity.OrderItem;
 import com.stockmate.order.api.order.entity.OrderStatus;
 import com.stockmate.order.api.order.repository.OrderRepository;
+import com.stockmate.order.api.websocket.handler.OrderWebSocketHandler;
 import com.stockmate.order.common.config.security.Role;
 import com.stockmate.order.common.config.security.SecurityUser;
 import com.stockmate.order.common.exception.BadRequestException;
 import com.stockmate.order.common.exception.NotFoundException;
+import com.stockmate.order.common.exception.UnauthorizedException;
 import com.stockmate.order.common.response.ApiResponse;
 import com.stockmate.order.common.response.ErrorStatus;
 import com.stockmate.order.common.response.SuccessStatus;
@@ -19,7 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.web.context.request.async.DeferredResult;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -39,9 +40,8 @@ public class OrderService {
     private final UserService userService;
     private final com.stockmate.order.common.producer.KafkaProducerService kafkaProducerService;
     private final OrderTransactionService orderTransactionService;
+    private final OrderWebSocketHandler orderWebSocketHandler;
 
-    // 주문 승인 대기 중인 DeferredResult를 관리하는 맵
-    private final ConcurrentHashMap<Long, DeferredResult<ResponseEntity<ApiResponse<OrderApprovalResponseDTO>>>> pendingApprovals = new ConcurrentHashMap<>();
 
     @Transactional
     public void makeOrder(OrderRequestDTO orderRequestDTO, Long memberId) {
@@ -373,104 +373,6 @@ public class OrderService {
         log.info("주문 반려 완료 - Order ID: {}, Order Number: {}, Status: REJECTED", orderRejectRequestDTO.getOrderId(), order.getOrderNumber());
     }
 
-    // 주문 승인 요청 (비동기 - DeferredResult 사용)
-    public void requestOrderApprovalAsync(Long orderId, Role role, DeferredResult<ResponseEntity<ApiResponse<OrderApprovalResponseDTO>>> deferredResult) {
-        log.info("=== 주문 승인 요청 시작 === Order ID: {}, Role: {}", orderId, role);
-
-        // 1. 권한 체크
-        if (role != Role.ADMIN && role != Role.SUPER_ADMIN) {
-            log.error("권한 부족 - Order ID: {}, Role: {}", orderId, role);
-            setErrorResult(deferredResult, 400, "해당 요청을 수행할 권한이 없습니다.");
-            return;
-        }
-
-        // 2. 주문 조회 및 상태 검증
-        Order order;
-        try {
-            order = orderRepository.findByIdWithItems(orderId)
-                    .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
-
-            if (order.getOrderStatus() != OrderStatus.ORDER_COMPLETED) {
-                log.warn("승인 불가능한 상태 - Order ID: {}, Status: {}", orderId, order.getOrderStatus());
-                setErrorResult(deferredResult, 400, "주문 완료 상태만 승인할 수 있습니다. 현재 상태: " + order.getOrderStatus());
-                return;
-            }
-        } catch (NotFoundException e) {
-            log.error("주문을 찾을 수 없음 - Order ID: {}", orderId);
-            setErrorResult(deferredResult, 404, "해당 주문을 찾을 수 없습니다.");
-            return;
-        } catch (Exception e) {
-            log.error("주문 조회 중 오류 발생 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
-            setErrorResult(deferredResult, 500, "주문 조회 중 오류가 발생했습니다.");
-            return;
-        }
-
-        // 3. Attempt ID 생성 및 상태 변경
-        String approvalAttemptId = UUID.randomUUID().toString();
-        log.info("승인 시도 ID 생성 - Order ID: {}, Attempt ID: {}", orderId, approvalAttemptId);
-
-        try {
-            orderTransactionService.updateOrderStatusToApproval(orderId, approvalAttemptId);
-            log.info("주문 상태 변경 완료 - Order ID: {}, Status: PENDING_APPROVAL", orderId);
-        } catch (Exception e) {
-            log.error("주문 상태 변경 실패 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
-            setErrorResult(deferredResult, 500, "주문 상태 변경 중 오류가 발생했습니다.");
-            return;
-        }
-
-        // 4. DeferredResult 등록
-        DeferredResult<ResponseEntity<ApiResponse<OrderApprovalResponseDTO>>> existing = pendingApprovals.putIfAbsent(orderId, deferredResult);
-        if (existing != null) {
-            log.warn("이미 처리 중인 주문 승인 요청 - Order ID: {}", orderId);
-            setErrorResult(deferredResult, 409, "이미 처리 중인 주문입니다.");
-            orderTransactionService.rollbackOrderToCompleted(orderId);
-            return;
-        }
-
-        // 5. Kafka 이벤트 발행
-        try {
-            List<StockDeductionRequestEvent.StockDeductionItem> items = order.getOrderItems().stream()
-                    .map(item -> StockDeductionRequestEvent.StockDeductionItem.builder()
-                            .partId(item.getPartId())
-                            .amount(item.getAmount())
-                            .build())
-                    .collect(Collectors.toList());
-
-            StockDeductionRequestEvent event = StockDeductionRequestEvent.builder()
-                    .orderId(orderId)
-                    .orderNumber(order.getOrderNumber())
-                    .approvalAttemptId(approvalAttemptId)
-                    .items(items)
-                    .build();
-
-            kafkaProducerService.sendStockDeductionRequest(event);
-            log.info("=== Kafka 이벤트 발행 완료 === Order ID: {}, Attempt ID: {}", orderId, approvalAttemptId);
-
-        } catch (Exception e) {
-            log.error("Kafka 이벤트 발행 실패 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
-            pendingApprovals.remove(orderId);
-            orderTransactionService.rollbackOrderToCompleted(orderId);
-            setErrorResult(deferredResult, 500, "재고 차감 요청 중 오류가 발생했습니다.");
-        }
-    }
-
-    // DeferredResult에 에러 응답 설정하는 헬퍼 메서드
-    private void setErrorResult(DeferredResult<ResponseEntity<ApiResponse<OrderApprovalResponseDTO>>> deferredResult,
-                                 int statusCode, String message) {
-        OrderApprovalResponseDTO errorDTO = OrderApprovalResponseDTO.builder()
-                .message(message)
-                .build();
-
-        ApiResponse<OrderApprovalResponseDTO> apiResponse = ApiResponse.<OrderApprovalResponseDTO>builder()
-                .status(statusCode)
-                .success(false)
-                .message(message)
-                .data(errorDTO)
-                .build();
-
-        ResponseEntity<ApiResponse<OrderApprovalResponseDTO>> response = ResponseEntity.status(statusCode).body(apiResponse);
-        deferredResult.setResult(response);
-    }
 
     // 주문 승인 상태 체크
     @Transactional(readOnly = true)
@@ -500,165 +402,175 @@ public class OrderService {
                 .build();
     }
 
-    // 재고 차감 성공 이벤트 처리
-    @Transactional
-    public void handleStockDeductionSuccess(StockDeductionSuccessEvent event) {
-        log.info("=== 재고 차감 성공 처리 시작 === Order ID: {}, Attempt ID: {}",
-                event.getOrderId(), event.getApprovalAttemptId());
+    // WebSocket 기반 주문 승인 요청
+    public void requestOrderApprovalWebSocket(Long orderId, Role role, Long userId) {
+        log.info("=== WebSocket 주문 승인 요청 시작 === Order ID: {}, Role: {}, User ID: {}", orderId, role, userId);
 
-        // 1. 주문 조회
-        Order order = orderRepository.findById(event.getOrderId())
-                .orElseThrow(() -> {
-                    log.error("주문을 찾을 수 없음 - Order ID: {}", event.getOrderId());
-                    return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
-                });
-
-        // 2. 상태 및 Attempt ID 검증
-        if (order.getOrderStatus() != OrderStatus.PENDING_APPROVAL) {
-            log.warn("주문 상태가 PENDING_APPROVAL이 아님 - Order ID: {}, Status: {}",
-                    event.getOrderId(), order.getOrderStatus());
-            return;
+        // 권한 체크 (ADMIN 또는 SUPER_ADMIN만 가능)
+        if (role != Role.ADMIN && role != Role.SUPER_ADMIN) {
+            log.error("권한 부족 - Order ID: {}, Role: {}", orderId, role);
+            throw new UnauthorizedException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
         }
 
-        if (!event.getApprovalAttemptId().equals(order.getApprovalAttemptId())) {
-            log.warn("Attempt ID 불일치 - Order ID: {}, 이벤트: {}, 주문: {}",
-                    event.getOrderId(), event.getApprovalAttemptId(), order.getApprovalAttemptId());
-            return;
-        }
+        try {
+            // 주문 존재 및 상태 확인
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
 
-        // 3. 주문 승인 처리
-        order.approve();
-        orderRepository.save(order);
-        log.info("주문 승인 완료 - Order ID: {}, Status: PENDING_SHIPPING", event.getOrderId());
-
-        // 4. DeferredResult 완료 (트랜잭션 커밋 후)
-        DeferredResult<ResponseEntity<ApiResponse<OrderApprovalResponseDTO>>> deferredResult =
-                pendingApprovals.remove(event.getOrderId());
-
-        if (deferredResult == null) {
-            log.warn("DeferredResult를 찾을 수 없음 (이미 제거됨 또는 타임아웃) - Order ID: {}", event.getOrderId());
-            return;
-        }
-
-        if (deferredResult.isSetOrExpired()) {
-            log.warn("DeferredResult가 이미 완료됨 - Order ID: {}", event.getOrderId());
-            return;
-        }
-
-        // 트랜잭션 외부에서 사용할 데이터를 미리 추출 (LazyInitializationException 방지)
-        final Long orderId = event.getOrderId();
-        final String orderNumber = order.getOrderNumber();
-
-        // 트랜잭션 커밋 후 응답 설정
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                try {
-                    OrderApprovalResponseDTO responseDTO = OrderApprovalResponseDTO.builder()
-                            .orderId(orderId)
-                            .orderNumber(orderNumber)
-                            .currentStatus(OrderStatus.PENDING_SHIPPING)
-                            .message("주문 승인이 완료되었습니다.")
-                            .build();
-
-                    ResponseEntity<ApiResponse<OrderApprovalResponseDTO>> response = ApiResponse.success(
-                            SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS,
-                            responseDTO
-                    );
-
-                    boolean isSet = deferredResult.setResult(response);
-                    if (isSet) {
-                        log.info("=== 주문 승인 응답 전송 완료 === Order ID: {}, Status: PENDING_SHIPPING", orderId);
-                    } else {
-                        log.warn("DeferredResult 응답 설정 실패 (이미 완료됨) - Order ID: {}", orderId);
-                    }
-                } catch (Exception e) {
-                    log.error("DeferredResult 응답 설정 중 오류 - Order ID: {}, 에러: {}",
-                            orderId, e.getMessage(), e);
-                }
+            if (order.getOrderStatus() != OrderStatus.ORDER_COMPLETED) {
+                throw new BadRequestException(ErrorStatus.INVALID_ORDER_STATUS_FOR_APPROVAL.getMessage());
             }
-        });
+
+            // 승인 시도 ID 생성
+            String approvalAttemptId = "WS-" + System.currentTimeMillis() + "-" + orderId;
+            log.info("승인 시도 ID 생성 - Order ID: {}, Attempt ID: {}", orderId, approvalAttemptId);
+
+            // 주문 상태를 PENDING_APPROVAL로 변경
+            orderTransactionService.updateOrderStatusToApproval(orderId, approvalAttemptId);
+
+            // WebSocket으로 상태 업데이트 전송 (요청자에게만)
+            orderWebSocketHandler.sendToUser(
+                    userId, 
+                    orderId, 
+                    OrderStatus.PENDING_APPROVAL, 
+                    "STOCK_DEDUCTION", 
+                    "재고 차감을 요청합니다.", 
+                    null
+            );
+
+            // 5. OrderItems와 함께 로드 (LazyInitializationException 방지)
+            Order orderWithItems = orderRepository.findByIdWithItems(orderId)
+                    .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
+
+            // 6. 재고 차감 요청 이벤트 생성
+            List<StockDeductionRequestEvent.StockDeductionItem> items = orderWithItems.getOrderItems().stream()
+                    .map(item -> StockDeductionRequestEvent.StockDeductionItem.builder()
+                            .partId(item.getPartId())
+                            .amount(item.getAmount())
+                            .build())
+                    .collect(Collectors.toList());
+
+            StockDeductionRequestEvent event = StockDeductionRequestEvent.builder()
+                    .orderId(orderId)
+                    .approvalAttemptId(approvalAttemptId)
+                    .items(items)
+                    .build();
+
+            // 7. Kafka 이벤트 발행
+            try {
+                kafkaProducerService.sendStockDeductionRequest(event);
+                log.info("재고 차감 요청 이벤트 발행 완료 - Order ID: {}, Attempt ID: {}", orderId, approvalAttemptId);
+            } catch (Exception e) {
+                log.error("Kafka 이벤트 발행 실패 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
+                
+                // Kafka 발행 실패 시 롤백
+                orderTransactionService.rollbackOrderToCompleted(orderId);
+                
+                // WebSocket으로 실패 알림
+                orderWebSocketHandler.sendOrderStatusUpdate(
+                        orderId, 
+                        OrderStatus.ORDER_COMPLETED, 
+                        "ERROR", 
+                        "주문 승인 처리 중 오류가 발생했습니다.", 
+                        null
+                );
+            }
+
+        } catch (Exception e) {
+            log.error("WebSocket 주문 승인 처리 중 오류 발생 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
+            
+            // WebSocket으로 에러 알림
+            orderWebSocketHandler.sendOrderStatusUpdate(
+                    orderId, 
+                    OrderStatus.REJECTED, 
+                    "ERROR", 
+                    "주문 승인 처리 중 오류가 발생했습니다: " + e.getMessage(), 
+                    null
+            );
+        }
     }
 
-    // 재고 차감 실패 이벤트 처리
+    // WebSocket 기반 재고 차감 성공 처리
     @Transactional
-    public void handleStockDeductionFailed(StockDeductionFailedEvent event) {
-        log.info("=== 재고 차감 실패 처리 시작 === Order ID: {}, Attempt ID: {}, Reason: {}",
-                event.getOrderId(), event.getApprovalAttemptId(), event.getReason());
+    public void handleStockDeductionSuccessWebSocket(StockDeductionSuccessEvent event) {
+        log.info("=== WebSocket 재고 차감 성공 처리 시작 === Order ID: {}, Attempt ID: {}", 
+                event.getOrderId(), event.getApprovalAttemptId());
 
-        // 1. 주문 조회
-        Order order = orderRepository.findById(event.getOrderId())
-                .orElseThrow(() -> {
-                    log.error("주문을 찾을 수 없음 - Order ID: {}", event.getOrderId());
-                    return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
-                });
+        try {
+            Order order = orderRepository.findById(event.getOrderId())
+                    .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
 
-        // 2. 상태 및 Attempt ID 검증
-        if (order.getOrderStatus() != OrderStatus.PENDING_APPROVAL) {
-            log.warn("주문 상태가 PENDING_APPROVAL이 아님 - Order ID: {}, Status: {}",
-                    event.getOrderId(), order.getOrderStatus());
-            return;
-        }
-
-        if (!event.getApprovalAttemptId().equals(order.getApprovalAttemptId())) {
-            log.warn("Attempt ID 불일치 - Order ID: {}, 이벤트: {}, 주문: {}",
-                    event.getOrderId(), event.getApprovalAttemptId(), order.getApprovalAttemptId());
-            return;
-        }
-
-        // 3. 주문 상태 복원 (ORDER_COMPLETED로 롤백)
-        order.rollbackToOrderCompleted();
-        orderRepository.save(order);
-        log.info("주문 상태 복원 완료 - Order ID: {}, Status: ORDER_COMPLETED", event.getOrderId());
-
-        // 4. DeferredResult 완료 (트랜잭션 커밋 후)
-        DeferredResult<ResponseEntity<ApiResponse<OrderApprovalResponseDTO>>> deferredResult =
-                pendingApprovals.remove(event.getOrderId());
-
-        if (deferredResult == null) {
-            log.warn("DeferredResult를 찾을 수 없음 (이미 제거됨 또는 타임아웃) - Order ID: {}", event.getOrderId());
-            return;
-        }
-
-        if (deferredResult.isSetOrExpired()) {
-            log.warn("DeferredResult가 이미 완료됨 - Order ID: {}", event.getOrderId());
-            return;
-        }
-
-        // 트랜잭션 외부에서 사용할 데이터를 미리 추출 (LazyInitializationException 방지)
-        final Long orderId = event.getOrderId();
-        final String orderNumber = order.getOrderNumber();
-        final String reason = event.getReason();
-
-        // 트랜잭션 커밋 후 응답 설정
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                try {
-                    OrderApprovalResponseDTO responseDTO = OrderApprovalResponseDTO.builder()
-                            .orderId(orderId)
-                            .orderNumber(orderNumber)
-                            .currentStatus(OrderStatus.ORDER_COMPLETED)
-                            .message("재고 부족으로 승인이 실패했습니다: " + reason)
-                            .build();
-
-                    ResponseEntity<ApiResponse<OrderApprovalResponseDTO>> response = ApiResponse.success(
-                            SuccessStatus.SEND_ORDER_APPROVAL_REQUEST_SUCCESS,
-                            responseDTO
-                    );
-
-                    boolean isSet = deferredResult.setResult(response);
-                    if (isSet) {
-                        log.info("=== 주문 승인 실패 응답 전송 완료 === Order ID: {}, Status: ORDER_COMPLETED", orderId);
-                    } else {
-                        log.warn("DeferredResult 응답 설정 실패 (이미 완료됨) - Order ID: {}", orderId);
-                    }
-                } catch (Exception e) {
-                    log.error("DeferredResult 응답 설정 중 오류 - Order ID: {}, 에러: {}",
-                            orderId, e.getMessage(), e);
-                }
+            // 상태 및 Attempt ID 검증
+            if (order.getOrderStatus() != OrderStatus.PENDING_APPROVAL) {
+                log.warn("주문 상태가 PENDING_APPROVAL이 아님 - Order ID: {}, Current Status: {}", event.getOrderId(), order.getOrderStatus());
+                return;
             }
-        });
+
+            if (!event.getApprovalAttemptId().equals(order.getApprovalAttemptId())) {
+                log.warn("승인 시도 ID가 일치하지 않음 - Order ID: {}, Event Attempt ID: {}, Order Attempt ID: {}", event.getOrderId(), event.getApprovalAttemptId(), order.getApprovalAttemptId());
+                return;
+            }
+
+            // 주문 승인 처리
+            order.approve();
+            orderRepository.save(order);
+
+            log.info("=== WebSocket 주문 승인 완료 === Order ID: {}, Status: {}", 
+                    event.getOrderId(), order.getOrderStatus());
+
+            // WebSocket으로 성공 알림
+            orderWebSocketHandler.sendOrderStatusUpdate(
+                    event.getOrderId(), 
+                    OrderStatus.PENDING_SHIPPING, 
+                    "COMPLETED", 
+                    "주문 승인이 완료되었습니다.", 
+                    null
+            );
+
+        } catch (Exception e) {
+            log.error("WebSocket 재고 차감 성공 처리 중 오류 발생 - Order ID: {}, 에러: {}", event.getOrderId(), e.getMessage(), e);
+        }
+    }
+
+    // WebSocket 기반 재고 차감 실패 처리
+    @Transactional
+    public void handleStockDeductionFailedWebSocket(StockDeductionFailedEvent event) {
+        log.info("=== WebSocket 재고 차감 실패 처리 시작 === Order ID: {}, Attempt ID: {}", 
+                event.getOrderId(), event.getApprovalAttemptId());
+
+        try {
+            Order order = orderRepository.findById(event.getOrderId()).orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
+
+            // 상태 및 Attempt ID 검증
+            if (order.getOrderStatus() != OrderStatus.PENDING_APPROVAL) {
+                log.warn("주문 상태가 PENDING_APPROVAL이 아님 - Order ID: {}, Current Status: {}", event.getOrderId(), order.getOrderStatus());
+                return;
+            }
+
+            if (!event.getApprovalAttemptId().equals(order.getApprovalAttemptId())) {
+                log.warn("승인 시도 ID가 일치하지 않음 - Order ID: {}, Event Attempt ID: {}, Order Attempt ID: {}", event.getOrderId(), event.getApprovalAttemptId(), order.getApprovalAttemptId());
+                return;
+            }
+
+            // 주문을 ORDER_COMPLETED로 롤백
+            order.rollbackToOrderCompleted();
+            orderRepository.save(order);
+
+            log.info("=== WebSocket 주문 승인 실패 처리 완료 === Order ID: {}, Status: {}", event.getOrderId(), order.getOrderStatus());
+
+            // WebSocket으로 실패 알림
+            orderWebSocketHandler.sendOrderStatusUpdate(
+                    event.getOrderId(), 
+                    OrderStatus.ORDER_COMPLETED, 
+                    "FAILED", 
+                    "재고 부족으로 주문 승인이 실패했습니다.", 
+                    event.getData()
+            );
+
+        } catch (Exception e) {
+            log.error("WebSocket 재고 차감 실패 처리 중 오류 발생 - Order ID: {}, 에러: {}", 
+                    event.getOrderId(), e.getMessage(), e);
+        }
     }
 
 }
