@@ -19,4 +19,7 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
     // 만료된 PENDING_APPROVAL 주문 조회 (스케줄러용)
     @Query("SELECT o FROM Order o WHERE o.orderStatus = :status AND o.approvalStartedAt < :expiryTime")
     List<Order> findExpiredPendingApprovals(@Param("status") OrderStatus status, @Param("expiryTime") LocalDateTime expiryTime);
+    
+    // orderNumber로 주문 조회
+    Optional<Order> findByOrderNumber(String orderNumber);
 }

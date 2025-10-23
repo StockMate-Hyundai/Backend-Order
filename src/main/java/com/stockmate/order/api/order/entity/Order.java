@@ -91,4 +91,12 @@ public class Order extends BaseTimeEntity {
         this.orderStatus = OrderStatus.ORDER_COMPLETED;
     }
 
+    // 배송 등록
+    public void registerShipping(String carrier, String trackingNumber) {
+        this.carrier = carrier;
+        this.trackingNumber = trackingNumber;
+        this.shippingDate = LocalDate.now();
+        this.orderStatus = OrderStatus.SHIPPING;
+    }
+
 }
