@@ -13,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.context.request.async.DeferredResult;
 
 import java.time.LocalDate;
 
@@ -112,6 +111,18 @@ public class OrderController {
 
         log.info("주문 상세 조회 완료 - Order ID: {}, Order Number: {}", orderId, response.getOrderNumber());
         return ApiResponse.success(SuccessStatus.SEND_ORDER_DETAIL_SUCCESS, response);
+    }
+
+    @Operation(summary = "배송 등록 API", description = "주문에 배송 정보를 등록합니다. WAREHOUSE 역할만 가능합니다.")
+    @PostMapping("/shipping")
+    public ResponseEntity<ApiResponse<ShippingRegistrationResponseDTO>> registerShipping(@RequestBody ShippingRegistrationRequestDTO requestDTO, @AuthenticationPrincipal SecurityUser securityUser) {
+
+        log.info("배송 등록 요청 - Order Number: {}, 요청자 ID: {}, 요청자 Role: {}", requestDTO.getOrderNumber(), securityUser.getMemberId(), securityUser.getRole());
+
+        ShippingRegistrationResponseDTO shippingInfo = orderService.registerShipping(requestDTO, securityUser.getRole());
+        log.info("배송 등록 완료 - Order Number: {}, Tracking Number: {}", requestDTO.getOrderNumber(), shippingInfo.getTrackingNumber());
+
+        return ApiResponse.success(SuccessStatus.REGISTER_SHIPPING_SUCCESS, shippingInfo);
     }
 
     @Operation(summary = "내 주문 리스트 조회 API", description = "내가 생성한 주문 리스트를 조회합니다.")
