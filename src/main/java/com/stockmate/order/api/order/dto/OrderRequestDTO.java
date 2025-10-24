@@ -1,6 +1,7 @@
 package com.stockmate.order.api.order.dto;
 
 import com.stockmate.order.api.order.entity.PaymentType;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -17,6 +18,7 @@ public class OrderRequestDTO {
 
     private List<OrderItemRequestDTO> orderItems;
     private LocalDate requestedShippingDate;
+    @NotNull(message = "결제 유형은 필수입니다.")
     private PaymentType paymentType;
     private String etc;
 }

@@ -113,6 +113,15 @@ public class OrderController {
         return ApiResponse.success(SuccessStatus.SEND_ORDER_DETAIL_SUCCESS, response);
     }
 
+    @Operation(summary = "주문 검증 조회 API", description = "주문 ID로 검증 데이터를 조회합니다.")
+    @GetMapping("validate/{orderId}")
+    public ResponseEntity<ApiResponse<OrderValidateDTO>> getValidateOrder(@PathVariable Long orderId, @AuthenticationPrincipal SecurityUser securityUser) {
+        log.info("주문 검증 조회 요청 - Order ID: {}, 요청자 ID: {}", orderId, securityUser.getMemberId());
+
+        OrderValidateDTO response = orderService.getValidateOrder(orderId, securityUser.getMemberId());
+        return ApiResponse.success(SuccessStatus.CHECK_ORDER_DATA_SUCCESS, response);
+    }
+
     @Operation(summary = "배송 등록 API", description = "주문에 배송 정보를 등록합니다. WAREHOUSE 역할만 가능합니다.")
     @PostMapping("/shipping")
     public ResponseEntity<ApiResponse<ShippingRegistrationResponseDTO>> registerShipping(@RequestBody ShippingRegistrationRequestDTO requestDTO, @AuthenticationPrincipal SecurityUser securityUser) {

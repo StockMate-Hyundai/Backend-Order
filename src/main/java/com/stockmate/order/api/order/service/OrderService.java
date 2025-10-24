@@ -4,6 +4,7 @@ import com.stockmate.order.api.order.dto.*;
 import com.stockmate.order.api.order.entity.Order;
 import com.stockmate.order.api.order.entity.OrderItem;
 import com.stockmate.order.api.order.entity.OrderStatus;
+import com.stockmate.order.api.order.entity.PaymentType;
 import com.stockmate.order.api.order.repository.OrderRepository;
 import com.stockmate.order.api.websocket.handler.OrderWebSocketHandler;
 import com.stockmate.order.common.config.security.Role;
@@ -53,9 +54,17 @@ public class OrderService {
         InventoryCheckResponseDTO checkResult = inventoryService.checkInventory(checkItems);
         log.info("재고 체크 완료 - 총 금액: {}", checkResult.getTotalPrice());
 
+        PaymentType paymentType;
+        try {
+            paymentType = PaymentType.valueOf(String.valueOf(orderRequestDTO.getPaymentType()));
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("유효하지 않은 결제 방식입니다.");
+        }
+
+
         Order order = Order.builder()
                 .totalPrice(checkResult.getTotalPrice())
-                .paymentType(orderRequestDTO.getPaymentType())
+                .paymentType(paymentType)
                 .requestedShippingDate(orderRequestDTO.getRequestedShippingDate())
                 .shippingDate(null)
                 .carrier(null)
@@ -89,10 +98,7 @@ public class OrderService {
                 .totalPrice(finalOrder.getTotalPrice())
                 .build();
 
-        kafkaProducerService.sendPayRequest(payRequestEvent);
 
-        log.info("결제 요청 이벤트 발송 완료 - Order ID: {}, 금액: {}",
-                finalOrder.getOrderId(), finalOrder.getTotalPrice());
         log.info("부품 발주 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}",
                 finalOrder.getOrderId(), finalOrder.getOrderNumber(), finalOrder.getMemberId(),
                 finalOrder.getOrderItems().size(), checkResult.getTotalPrice(),
@@ -229,6 +235,28 @@ public class OrderService {
                 response.getTotalElements(), content.size());
 
         return response;
+    }
+
+    // 주문 정보 검증 조회
+    public OrderValidateDTO getValidateOrder(Long orderId, Long memberId) {
+        log.info("주문 검증 조회 - Order ID: {}, Member ID: {}", orderId, memberId);
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> {
+                    log.error("주문을 찾을 수 없음 - Order ID: {}", orderId);
+                    return new NotFoundException("주문 정보를 찾을 수 없습니다.");
+                });
+
+        if (memberId != order.getMemberId()) {
+            log.error("권한 없음 - Order의 Member ID: {}, 요청자 Member ID: {}, Role: {}",
+                    order.getMemberId(), memberId);
+            throw new BadRequestException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
+        }
+
+        log.info("주문 검증 조회 완료 - Order ID: {}, Order Number: {}, Status: {}",
+                order.getOrderId(), order.getOrderNumber(), order.getOrderStatus());
+
+        return OrderValidateDTO.of(order);
     }
 
     private OrderDetailResponseDTO toOrderDetailResponseDTO(

@@ -30,6 +30,8 @@ public class Order extends BaseTimeEntity {
 
     private int totalPrice; // 총 주문 금액
 
+    @Column(name = "payment_type", nullable = false)
+    @Enumerated(EnumType.STRING)
     private PaymentType paymentType; // 결제 방식
 
     private LocalDate requestedShippingDate; // 원하는 출고 일자
