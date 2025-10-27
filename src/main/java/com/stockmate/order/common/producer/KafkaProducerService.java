@@ -23,7 +23,7 @@ public class KafkaProducerService {
     @Value("${kafka.topics.stock-restore-request}")
     private String stockRestoreRequestTopic;
 
-    @Value("${kafka.topics.pay-request")
+    @Value("${kafka.topics.pay-request}")
     private String payRequestTopic;
 
     // 재고 차감 요청 이벤트 발송
