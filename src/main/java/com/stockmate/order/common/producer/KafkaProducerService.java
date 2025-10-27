@@ -23,7 +23,7 @@ public class KafkaProducerService {
     @Value("${kafka.topics.stock-restore-request}")
     private String stockRestoreRequestTopic;
 
-    @Value("${kafka.topics.pay-request")
+    @Value("${kafka.topics.pay-request}")
     private String payRequestTopic;
 
     @Value("${kafka.topics.receiving-process-request}")

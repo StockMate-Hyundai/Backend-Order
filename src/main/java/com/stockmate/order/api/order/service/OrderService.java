@@ -62,7 +62,7 @@ public class OrderService {
         } catch (IllegalArgumentException e) {
             throw new BadRequestException("유효하지 않은 결제 방식입니다.");
         }
-        
+
         Order order = Order.builder()
                 .totalPrice(checkResult.getTotalPrice())
                 .paymentType(paymentType)
@@ -93,12 +93,18 @@ public class OrderService {
                 .build();
         Order finalOrder = orderRepository.save(updatedOrder);
 
-        PayRequestEvent payRequestEvent = PayRequestEvent.builder()
-                .orderId(finalOrder.getOrderId())
-                .orderNumber(finalOrder.getOrderNumber())
-                .totalPrice(finalOrder.getTotalPrice())
-                .build();
+        PayRequestEvent payRequestEvent = PayRequestEvent.of(finalOrder, memberId);
 
+        try {
+            kafkaProducerService.sendPayRequest(payRequestEvent);
+            log.info("결제 요청 이벤트 발송 완료 - Order ID: {}, 금액: {}",
+                    finalOrder.getOrderId(), finalOrder.getTotalPrice());
+        } catch (Exception e) {
+            log.error("결제 요청 이벤트 발송 실패 - Order ID: {}", finalOrder.getOrderId(), e);
+            Order failedOrder = finalOrder.toBuilder().orderStatus(OrderStatus.FAILED).build();
+            orderRepository.save(failedOrder);
+            throw new BadRequestException("결제 요청 처리 중 오류가 발생했습니다.");
+        }
 
         log.info("부품 발주 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}",
                 finalOrder.getOrderId(), finalOrder.getOrderNumber(), finalOrder.getMemberId(),
@@ -141,6 +147,25 @@ public class OrderService {
 
         log.info("주문 취소 완료 - Order ID: {}, Order Number: {}, 취소자 Role: {}",
                 orderId, order.getOrderNumber(), role);
+    }
+
+    // 결제 성공 or 실패 이벤트 처리
+    @Transactional
+    public void changeOrderStatus(Long orderId, String orderStatus) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> {
+                    log.error("주문을 찾을 수 없음 - Order ID: {}", orderId);
+                    return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
+                });
+
+        try {
+            OrderStatus newStatus = OrderStatus.valueOf(orderStatus); // 문자열 → Enum 변환
+            order.setOrderStatus(newStatus); // setter 호출
+            log.info("✅ 주문 상태 변경 완료 - Order ID: {}, 상태: {}", orderId, newStatus);
+        } catch (IllegalArgumentException e) {
+            log.error("❌ 잘못된 주문 상태 입력: {}", orderStatus);
+            throw new BadRequestException("유효하지 않은 주문 상태 값입니다: " + orderStatus);
+        }
     }
 
     @Transactional
