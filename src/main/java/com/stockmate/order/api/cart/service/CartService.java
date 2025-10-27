@@ -196,6 +196,7 @@ public class CartService {
                     .trim(partDetail.getTrim())
                     .price(partDetail.getPrice())
                     .stock(partDetail.getAmount())
+                    .image(partDetail.getImage())
                     .build();
 
             itemDetails.add(itemDetail);
@@ -211,6 +212,29 @@ public class CartService {
                 .items(itemDetails)
                 .totalPrice(totalPrice)
                 .build();
+    }
+
+    // 장바구니 특정 부품 삭제
+    @Transactional
+    public void removeItemFromCart(Long memberId, Long partId) {
+        log.info("장바구니 특정 부품 삭제 - Member ID: {}, Part ID: {}", memberId, partId);
+
+        Cart cart = cartRepository.findByMemberIdWithItems(memberId)
+                .orElseThrow(() -> new BadRequestException(ErrorStatus.CART_EMPTY_EXCEPTION.getMessage()));
+
+        // 해당 부품이 장바구니에 있는지 확인
+        boolean itemExists = cart.getCartItems().stream()
+                .anyMatch(item -> item.getPartId().equals(partId));
+
+        if (!itemExists) {
+            throw new BadRequestException(ErrorStatus.CART_ITEM_NOT_FOUND_EXCEPTION.getMessage());
+        }
+
+        // 부품 삭제
+        cart.removeItem(partId);
+        cartRepository.save(cart);
+
+        log.info("장바구니 부품 삭제 완료 - Member ID: {}, Part ID: {}", memberId, partId);
     }
 
     // 장바구니 전체 비우기

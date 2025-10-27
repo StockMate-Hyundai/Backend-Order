@@ -22,5 +22,6 @@ public class CartItemDetailResponseDTO {
     private String trim;
     private int price;
     private int stock;
+    private String image;
 }
 
