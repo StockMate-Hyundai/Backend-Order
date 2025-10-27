@@ -411,48 +411,52 @@ public class OrderService {
                 order.completeReceiving();
                 orderRepository.save(order);
                 
+                // Information 서버로 입고 히스토리 등록 이벤트 발행
+                String message = String.format("%s 주문 입고처리 되었습니다.", order.getOrderNumber());
+                
+                ReceivingHistoryRequestEvent historyEvent = ReceivingHistoryRequestEvent.builder()
+                        .orderId(order.getOrderId()) // 주문 ID
+                        .approvalAttemptId(attemptId) // 승인 시도 ID
+                        .memberId(order.getMemberId()) // 가맹점 ID
+                        .orderNumber(order.getOrderNumber()) // 주문 번호
+                        .message(message) // 메시지
+                        .status("RECEIVED") // 상태
+                        .build();
+
+                kafkaProducerService.sendReceivingHistoryRequest(historyEvent);
+                log.info("입고 히스토리 등록 이벤트 발행 완료 - Order Number: {}, 가맹점 ID: {}", order.getOrderNumber(), order.getMemberId());
+
+                // WebSocket으로 상태 업데이트 전송 (요청자에게만)
+                orderWebSocketHandler.sendToUser(
+                        userId,
+                        order.getOrderId(),
+                        OrderStatus.RECEIVED, // 성공 시 RECEIVED 상태로 전송
+                        "RECEIVING_PROCESS_SUCCESS",
+                        "입고 처리가 완료되었습니다.",
+                        null
+                );
+                
+                log.info("입고 처리 완료 - Order ID: {}, Status: RECEIVED", order.getOrderId());
+                
             } catch (Exception partsException) {
-                log.error("Parts 서버 재고 업데이트 실패 - Order ID: {}, 에러: {}", order.getOrderId(), partsException.getMessage(), partsException);
+                log.error("❌ Parts 서버 재고 업데이트 실패 - Order ID: {}, 에러: {}", order.getOrderId(), partsException.getMessage(), partsException);
                 
                 // 실패 시 롤백
                 orderTransactionService.rollbackOrderToShipping(order.getOrderId());
+                log.info("주문 상태 롤백 완료 - Order ID: {}, Status: SHIPPING", order.getOrderId());
                 
-                // WebSocket으로 실패 알림
-                orderWebSocketHandler.sendOrderStatusUpdate(
+                // WebSocket으로 실패 알림 (요청자에게만)
+                orderWebSocketHandler.sendToUser(
+                        userId,
                         order.getOrderId(),
-                        OrderStatus.SHIPPING,
-                        "ERROR",
-                        "재고 업데이트 중 오류가 발생했습니다.",
+                        OrderStatus.SHIPPING, // 롤백된 상태
+                        "RECEIVING_PROCESS_ERROR",
+                        "재고 업데이트 중 오류가 발생했습니다: " + partsException.getMessage(),
                         null
                 );
                 
                 throw new InternalServerException("재고 업데이트 실패: " + partsException.getMessage());
             }
-
-            // Information 서버로 입고 히스토리 등록 이벤트 발행
-            String message = String.format("%s 주문 입고처리 되었습니다.", order.getOrderNumber());
-            
-            ReceivingHistoryRequestEvent historyEvent = ReceivingHistoryRequestEvent.builder()
-                    .orderId(order.getOrderId()) // 주문 ID
-                    .approvalAttemptId(attemptId) // 승인 시도 ID
-                    .memberId(order.getMemberId()) // 가맹점 ID
-                    .orderNumber(order.getOrderNumber()) // 주문 번호
-                    .message(message) // 메시지
-                    .status("RECEIVED") // 상태
-                    .build();
-
-            kafkaProducerService.sendReceivingHistoryRequest(historyEvent);
-            log.info("입고 히스토리 등록 이벤트 발행 완료 - Order Number: {}, 가맹점 ID: {}", order.getOrderNumber(), order.getMemberId());
-
-            // WebSocket으로 상태 업데이트 전송 (요청자에게만)
-            orderWebSocketHandler.sendToUser(
-                    userId,
-                    order.getOrderId(),
-                    OrderStatus.PENDING_RECEIVING,
-                    "RECEIVING_PROCESS",
-                    "입고 처리를 요청합니다.",
-                    null
-            );
 
         } catch (Exception e) {
             log.error("Kafka 이벤트 발행 실패 - Order ID: {}, 에러: {}", order.getOrderId(), e.getMessage(), e);
