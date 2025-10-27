@@ -26,6 +26,12 @@ public class KafkaProducerService {
     @Value("${kafka.topics.pay-request}")
     private String payRequestTopic;
 
+    @Value("${kafka.topics.receiving-process-request}")
+    private String receivingProcessRequestTopic;
+
+    @Value("${kafka.topics.receiving-history-request}")
+    private String receivingHistoryRequestTopic;
+
     // 재고 차감 요청 이벤트 발송
     public void sendStockDeductionRequest(StockDeductionRequestEvent event) {
         log.info("재고 차감 요청 이벤트 발송 시작 - Order ID: {}, Order Number: {}", 
@@ -93,6 +99,56 @@ public class KafkaProducerService {
                         event.getOrderId());
             } else {
                 log.error("결제 요청 이벤트 발송 실패 - Order ID: {}, 에러: {}",
+                        event.getOrderId(), ex.getMessage(), ex);
+            }
+        });
+    }
+
+    // 입고 처리 요청 이벤트 발송
+    public void sendReceivingProcessRequest(ReceivingProcessRequestEvent event) {
+        log.info("입고 처리 요청 이벤트 발송 시작 - Order ID: {}, Order Number: {}, 가맹점 ID: {}", 
+                event.getOrderId(), event.getOrderNumber(), event.getMemberId());
+
+        CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(
+                receivingProcessRequestTopic,
+                event.getOrderId().toString(),
+                event
+        );
+
+        future.whenComplete((result, ex) -> {
+            if (ex == null) {
+                log.info("입고 처리 요청 이벤트 발송 성공 - 토픽: {}, 파티션: {}, 오프셋: {}, Order ID: {}",
+                        result.getRecordMetadata().topic(),
+                        result.getRecordMetadata().partition(),
+                        result.getRecordMetadata().offset(),
+                        event.getOrderId());
+            } else {
+                log.error("입고 처리 요청 이벤트 발송 실패 - Order ID: {}, 에러: {}",
+                        event.getOrderId(), ex.getMessage(), ex);
+            }
+        });
+    }
+
+    // 입고 히스토리 등록 요청 이벤트 발송
+    public void sendReceivingHistoryRequest(ReceivingHistoryRequestEvent event) {
+        log.info("입고 히스토리 등록 요청 이벤트 발송 시작 - Order ID: {}, Order Number: {}, 가맹점 ID: {}", 
+                event.getOrderId(), event.getOrderNumber(), event.getMemberId());
+
+        CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(
+                receivingHistoryRequestTopic,
+                event.getOrderId().toString(),
+                event
+        );
+
+        future.whenComplete((result, ex) -> {
+            if (ex == null) {
+                log.info("입고 히스토리 등록 요청 이벤트 발송 성공 - 토픽: {}, 파티션: {}, 오프셋: {}, Order ID: {}",
+                        result.getRecordMetadata().topic(),
+                        result.getRecordMetadata().partition(),
+                        result.getRecordMetadata().offset(),
+                        event.getOrderId());
+            } else {
+                log.error("입고 히스토리 등록 요청 이벤트 발송 실패 - Order ID: {}, 에러: {}",
                         event.getOrderId(), ex.getMessage(), ex);
             }
         });

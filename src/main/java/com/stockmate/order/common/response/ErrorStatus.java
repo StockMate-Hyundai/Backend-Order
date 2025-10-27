@@ -21,6 +21,7 @@ public enum ErrorStatus {
     ALREADY_SHIPPED_OR_DELIVERED_ORDER_EXCEPTION(HttpStatus.BAD_REQUEST,"배송 중이거나 완료된 주문은 취소할 수 없습니다."),
     INVALID_ORDER_STATUS_FOR_APPROVAL(HttpStatus.BAD_REQUEST,"주문 완료 상태만 승인할 수 있습니다."),
     INVALID_ORDER_STATUS_FOR_SHIPPING(HttpStatus.BAD_REQUEST,"출고 대기 상태만 배송 등록할 수 있습니다."),
+    INVALID_ORDER_STATUS_FOR_RECEIVING(HttpStatus.BAD_REQUEST,"배송 중 상태만 입고 처리할 수 있습니다."),
     PARTS_SERVER_UNAVAILABLE_EXCEPTION(HttpStatus.SERVICE_UNAVAILABLE,"부품 서버가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해주세요."),
     USER_SERVER_UNAVAILABLE_EXCEPTION(HttpStatus.SERVICE_UNAVAILABLE,"사용자 서버가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해주세요."),
     CART_EMPTY_EXCEPTION(HttpStatus.BAD_REQUEST,"장바구니가 비어있습니다."),
@@ -35,6 +36,7 @@ public enum ErrorStatus {
      */
     USER_NOTFOUND_EXCEPTION(HttpStatus.NOT_FOUND,"해당 사용자를 찾을 수 없습니다."),
     ORDER_NOT_FOUND_EXCEPTION(HttpStatus.NOT_FOUND,"해당 주문을 찾을 수 없습니다."),
+    CART_ITEM_NOT_FOUND_EXCEPTION(HttpStatus.NOT_FOUND, "해당 부품이 없습니다."),
 
     /**
      * 500 SERVER_ERROR

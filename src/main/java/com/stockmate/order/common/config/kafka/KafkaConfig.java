@@ -1,5 +1,11 @@
 package com.stockmate.order.common.config.kafka;
 
+import com.stockmate.order.api.order.dto.ReceivingHistoryRequestEvent;
+import com.stockmate.order.api.order.dto.ReceivingHistorySuccessEvent;
+import com.stockmate.order.api.order.dto.ReceivingHistoryFailedEvent;
+import com.stockmate.order.api.order.dto.ReceivingProcessRequestEvent;
+import com.stockmate.order.api.order.dto.ReceivingProcessSuccessEvent;
+import com.stockmate.order.api.order.dto.ReceivingProcessFailedEvent;
 import com.stockmate.order.api.order.dto.StockDeductionRequestEvent;
 import com.stockmate.order.api.order.dto.StockRestoreRequestEvent;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +52,12 @@ public class KafkaConfig {
         Map<String, Class<?>> classIdMapping = new HashMap<>();
         classIdMapping.put("stockDeductionRequest", StockDeductionRequestEvent.class);
         classIdMapping.put("stockRestoreRequest", StockRestoreRequestEvent.class);
+        classIdMapping.put("receivingProcessRequest", ReceivingProcessRequestEvent.class);
+        classIdMapping.put("receivingProcessSuccess", ReceivingProcessSuccessEvent.class);
+        classIdMapping.put("receivingProcessFailed", ReceivingProcessFailedEvent.class);
+        classIdMapping.put("receivingHistoryRequest", ReceivingHistoryRequestEvent.class);
+        classIdMapping.put("receivingHistorySuccess", ReceivingHistorySuccessEvent.class);
+        classIdMapping.put("receivingHistoryFailed", ReceivingHistoryFailedEvent.class);
         typeMapper.setIdClassMapping(classIdMapping);
         jsonSerializer.setTypeMapper(typeMapper);
 
@@ -67,7 +79,7 @@ public class KafkaConfig {
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
         props.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class.getName());
-        props.put(JsonDeserializer.TRUSTED_PACKAGES, "com.stockmate.order.api.order.dto,com.stockmate.parts.api.parts.dto");
+        props.put(JsonDeserializer.TRUSTED_PACKAGES, "com.stockmate.order.api.order.dto,com.stockmate.parts.api.parts.dto,com.stockmate.information.api.order.dto");
         props.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
         props.put(JsonDeserializer.VALUE_DEFAULT_TYPE, "com.stockmate.order.api.order.dto.StockDeductionSuccessEvent");
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);

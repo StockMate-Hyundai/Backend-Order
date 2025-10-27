@@ -22,4 +22,8 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
     
     // orderNumber로 주문 조회
     Optional<Order> findByOrderNumber(String orderNumber);
+    
+    // orderNumber로 주문 조회 (OrderItems와 함께 fetch join)
+    @Query("SELECT o FROM Order o LEFT JOIN FETCH o.orderItems WHERE o.orderNumber = :orderNumber")
+    Optional<Order> findByOrderNumberWithItems(@Param("orderNumber") String orderNumber);
 }

@@ -55,7 +55,7 @@ public class Order extends BaseTimeEntity {
     private LocalDateTime approvalStartedAt; // 승인 시작 시간 (장기 PENDING 방지용)
 
     @Column(name = "member_id", nullable = false)
-    private Long memberId;
+    private Long memberId; // 가맹점 ID
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
@@ -102,6 +102,23 @@ public class Order extends BaseTimeEntity {
         this.carrier = carrier;
         this.trackingNumber = trackingNumber;
         this.shippingDate = LocalDate.now();
+        this.orderStatus = OrderStatus.SHIPPING;
+    }
+
+    // 입고 처리 시작 (입고 대기 상태로 변경)
+    public void startReceiving(String attemptId) {
+        this.orderStatus = OrderStatus.PENDING_RECEIVING;
+        this.approvalAttemptId = attemptId;
+        this.approvalStartedAt = LocalDateTime.now();
+    }
+
+    // 입고 완료
+    public void completeReceiving() {
+        this.orderStatus = OrderStatus.RECEIVED;
+    }
+
+    // 입고 실패 시 다시 배송 중 상태로 되돌림
+    public void rollbackToShipping() {
         this.orderStatus = OrderStatus.SHIPPING;
     }
 
