@@ -4,13 +4,16 @@ import com.stockmate.order.api.order.dto.*;
 import com.stockmate.order.api.order.entity.Order;
 import com.stockmate.order.api.order.entity.OrderItem;
 import com.stockmate.order.api.order.entity.OrderStatus;
+import com.stockmate.order.api.order.entity.PaymentType;
 import com.stockmate.order.api.order.repository.OrderRepository;
 import com.stockmate.order.api.websocket.handler.OrderWebSocketHandler;
 import com.stockmate.order.common.config.security.Role;
 import com.stockmate.order.common.config.security.SecurityUser;
 import com.stockmate.order.common.exception.BadRequestException;
+import com.stockmate.order.common.exception.InternalServerException;
 import com.stockmate.order.common.exception.NotFoundException;
 import com.stockmate.order.common.exception.UnauthorizedException;
+import com.stockmate.order.common.producer.KafkaProducerService;
 import com.stockmate.order.common.response.ErrorStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +35,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final InventoryService inventoryService;
     private final UserService userService;
-    private final com.stockmate.order.common.producer.KafkaProducerService kafkaProducerService;
+    private final KafkaProducerService kafkaProducerService;
     private final OrderTransactionService orderTransactionService;
     private final OrderWebSocketHandler orderWebSocketHandler;
 
@@ -53,16 +56,24 @@ public class OrderService {
         InventoryCheckResponseDTO checkResult = inventoryService.checkInventory(checkItems);
         log.info("재고 체크 완료 - 총 금액: {}", checkResult.getTotalPrice());
 
+        PaymentType paymentType;
+        try {
+            paymentType = PaymentType.valueOf(String.valueOf(orderRequestDTO.getPaymentType()));
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("유효하지 않은 결제 방식입니다.");
+        }
+        
         Order order = Order.builder()
-                .memberId(memberId)
-                .etc(orderRequestDTO.getEtc())
-                .requestedShippingDate(orderRequestDTO.getRequestedShippingDate())
                 .totalPrice(checkResult.getTotalPrice())
-                .orderStatus(OrderStatus.ORDER_COMPLETED)
-                .rejectedMessage(null)
+                .paymentType(paymentType)
+                .requestedShippingDate(orderRequestDTO.getRequestedShippingDate())
+                .shippingDate(null)
                 .carrier(null)
                 .trackingNumber(null)
-                .shippingDate(null)
+                .rejectedMessage(null)
+                .orderStatus(OrderStatus.ORDER_COMPLETED)
+                .etc(orderRequestDTO.getEtc())
+                .memberId(memberId) // 가맹점 ID
                 .orderItems(new ArrayList<>())
                 .build();
 
@@ -82,10 +93,18 @@ public class OrderService {
                 .build();
         Order finalOrder = orderRepository.save(updatedOrder);
 
+        PayRequestEvent payRequestEvent = PayRequestEvent.builder()
+                .orderId(finalOrder.getOrderId())
+                .orderNumber(finalOrder.getOrderNumber())
+                .totalPrice(finalOrder.getTotalPrice())
+                .build();
+
+
         log.info("부품 발주 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}",
                 finalOrder.getOrderId(), finalOrder.getOrderNumber(), finalOrder.getMemberId(),
                 finalOrder.getOrderItems().size(), checkResult.getTotalPrice(),
-                finalOrder.getOrderStatus());
+                finalOrder.getOrderStatus()
+        );
     }
 
     @Transactional
@@ -219,6 +238,28 @@ public class OrderService {
         return response;
     }
 
+    // 주문 정보 검증 조회
+    public OrderValidateDTO getValidateOrder(Long orderId, Long memberId) {
+        log.info("주문 검증 조회 - Order ID: {}, Member ID: {}", orderId, memberId);
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> {
+                    log.error("주문을 찾을 수 없음 - Order ID: {}", orderId);
+                    return new NotFoundException("주문 정보를 찾을 수 없습니다.");
+                });
+
+        if (memberId != order.getMemberId()) {
+            log.error("권한 없음 - Order의 Member ID: {}, 요청자 Member ID: {}, Role: {}",
+                    order.getMemberId(), memberId);
+            throw new BadRequestException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
+        }
+
+        log.info("주문 검증 조회 완료 - Order ID: {}, Order Number: {}, Status: {}",
+                order.getOrderId(), order.getOrderNumber(), order.getOrderStatus());
+
+        return OrderValidateDTO.of(order);
+    }
+
     private OrderDetailResponseDTO toOrderDetailResponseDTO(
             Order order,
             Map<Long, UserBatchResponseDTO> userMap,
@@ -280,7 +321,7 @@ public class OrderService {
         order.registerShipping(carrier, trackingNumber);
         orderRepository.save(order);
 
-        log.info("배송 등록 완료 - Order Number: {}, Carrier: {}, Tracking Number: {}", 
+        log.info("배송 등록 완료 - Order Number: {}, Carrier: {}, Tracking Number: {}",
                 requestDTO.getOrderNumber(), carrier, trackingNumber);
 
         return ShippingRegistrationResponseDTO.builder()
@@ -299,6 +340,184 @@ public class OrderService {
             trackingNumber.append((int) (Math.random() * 10));
         }
         return trackingNumber.toString();
+    }
+
+    // 입고 처리 요청 (WebSocket 기반)
+    @Transactional
+    public void requestReceivingProcess(ReceivingProcessRequestDTO requestDTO, Role role, Long userId) {
+        log.info("입고 처리 요청 - Order Number: {}, 요청자 Role: {}, User ID: {}", requestDTO.getOrderNumber(), role, userId);
+
+        // 권한 확인: 가맹점 사용자만 입고 처리 가능 (USER 역할)
+        if (role != Role.USER) {
+            log.error("권한 부족 - Role: {}", role);
+            throw new UnauthorizedException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
+        }
+
+        // 주문 조회 (OrderItems와 함께)
+        Order order = orderRepository.findByOrderNumberWithItems(requestDTO.getOrderNumber())
+                .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
+        
+        // 주문의 가맹점(memberId)과 요청자의 가맹점 ID가 일치하는지 확인
+        if (!order.getMemberId().equals(userId)) {
+            log.error("가맹점 불일치 - Order Member ID: {}, 요청자 ID: {}", order.getMemberId(), userId);
+            throw new UnauthorizedException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
+        }
+
+        // 주문 상태 확인 (배송 중 상태만 입고 처리 가능)
+        if (order.getOrderStatus() != OrderStatus.SHIPPING) {
+            log.warn("입고 처리 불가능한 상태 - Order Number: {}, Status: {}", requestDTO.getOrderNumber(), order.getOrderStatus());
+            throw new BadRequestException(ErrorStatus.INVALID_ORDER_STATUS_FOR_RECEIVING.getMessage());
+        }
+
+        // 입고 처리 시도 ID 생성
+        String attemptId = "RECEIVING_" + System.currentTimeMillis() + "_" + order.getOrderId();
+
+        try {
+            // 주문 상태를 입고 대기로 변경
+            orderTransactionService.updateOrderStatusToReceiving(order.getOrderId(), attemptId);
+
+            // 입고 처리 요청 이벤트 생성
+            List<ReceivingItemDTO> items = order.getOrderItems().stream()
+                    .map(item -> ReceivingItemDTO.builder()
+                            .partId(item.getPartId())
+                            .quantity(item.getAmount())
+                            .build())
+                    .toList();
+
+            ReceivingProcessRequestEvent event = ReceivingProcessRequestEvent.builder()
+                    .orderId(order.getOrderId())
+                    .orderNumber(order.getOrderNumber())
+                    .approvalAttemptId(attemptId)
+                    .memberId(order.getMemberId()) // 가맹점 ID
+                    .items(items)
+                    .build();
+
+            // Kafka로 입고 처리 요청 이벤트 발행
+            kafkaProducerService.sendReceivingProcessRequest(event);
+            log.info("입고 처리 요청 이벤트 발행 완료 - Order ID: {}, Attempt ID: {}", order.getOrderId(), attemptId);
+
+            // Information 서버로 입고 히스토리 등록 이벤트 발행
+            String message = String.format("%s 주문 입고처리 되었습니다.", order.getOrderNumber());
+            
+            ReceivingHistoryRequestEvent historyEvent = ReceivingHistoryRequestEvent.builder()
+                    .orderId(order.getOrderId()) // 주문 ID
+                    .approvalAttemptId(attemptId) // 승인 시도 ID
+                    .memberId(order.getMemberId()) // 가맹점 ID
+                    .orderNumber(order.getOrderNumber()) // 주문 번호
+                    .message(message) // 메시지
+                    .status("RECEIVED") // 상태
+                    .build();
+
+            kafkaProducerService.sendReceivingHistoryRequest(historyEvent);
+            log.info("입고 히스토리 등록 이벤트 발행 완료 - Order Number: {}, 가맹점 ID: {}", order.getOrderNumber(), order.getMemberId());
+
+            // WebSocket으로 상태 업데이트 전송 (요청자에게만)
+            orderWebSocketHandler.sendToUser(
+                    userId,
+                    order.getOrderId(),
+                    OrderStatus.PENDING_RECEIVING,
+                    "RECEIVING_PROCESS",
+                    "입고 처리를 요청합니다.",
+                    null
+            );
+
+        } catch (Exception e) {
+            log.error("Kafka 이벤트 발행 실패 - Order ID: {}, 에러: {}", order.getOrderId(), e.getMessage(), e);
+
+            // Kafka 발행 실패 시 롤백
+            orderTransactionService.rollbackOrderToShipping(order.getOrderId());
+
+            // WebSocket으로 실패 알림
+            orderWebSocketHandler.sendOrderStatusUpdate(
+                    order.getOrderId(),
+                    OrderStatus.SHIPPING,
+                    "ERROR",
+                    "입고 처리 요청 중 오류가 발생했습니다.",
+                    null
+            );
+
+            throw new InternalServerException(ErrorStatus.KAFKA_EVENT_EXCEPTION.getMessage());
+        }
+    }
+
+    // 입고 처리 성공 처리 (WebSocket 기반)
+    @Transactional
+    public void handleReceivingProcessSuccessWebSocket(ReceivingProcessSuccessEvent event) {
+        log.info("=== WebSocket 입고 처리 성공 처리 시작 === Order ID: {}, Attempt ID: {}",
+                event.getOrderId(), event.getApprovalAttemptId());
+
+        try {
+            Order order = orderRepository.findById(event.getOrderId())
+                    .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
+
+            // 상태 및 시도 ID 검증
+            if (order.getOrderStatus() != OrderStatus.PENDING_RECEIVING ||
+                    !event.getApprovalAttemptId().equals(order.getApprovalAttemptId())) {
+                log.warn("입고 처리 성공 이벤트 무시 - Order ID: {}, 현재 상태: {}, 현재 시도 ID: {}, 이벤트 시도 ID: {}",
+                        event.getOrderId(), order.getOrderStatus(), order.getApprovalAttemptId(), event.getApprovalAttemptId());
+                return;
+            }
+
+            // 입고 완료 처리
+            order.completeReceiving();
+            orderRepository.save(order);
+
+            log.info("=== WebSocket 입고 처리 완료 === Order ID: {}, Status: {}",
+                    event.getOrderId(), order.getOrderStatus());
+
+            // WebSocket으로 성공 알림
+            orderWebSocketHandler.sendOrderStatusUpdate(
+                    event.getOrderId(),
+                    OrderStatus.RECEIVED,
+                    "COMPLETED",
+                    "입고 처리가 완료되었습니다.",
+                    null
+            );
+
+        } catch (Exception e) {
+            log.error("WebSocket 입고 처리 성공 처리 중 오류 발생 - Order ID: {}, 에러: {}",
+                    event.getOrderId(), e.getMessage(), e);
+        }
+    }
+
+    // 입고 처리 실패 처리 (WebSocket 기반)
+    @Transactional
+    public void handleReceivingProcessFailedWebSocket(ReceivingProcessFailedEvent event) {
+        log.info("=== WebSocket 입고 처리 실패 처리 시작 === Order ID: {}, Attempt ID: {}",
+                event.getOrderId(), event.getApprovalAttemptId());
+
+        try {
+            Order order = orderRepository.findById(event.getOrderId())
+                    .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
+
+            // 상태 및 시도 ID 검증
+            if (order.getOrderStatus() != OrderStatus.PENDING_RECEIVING ||
+                    !event.getApprovalAttemptId().equals(order.getApprovalAttemptId())) {
+                log.warn("입고 처리 실패 이벤트 무시 - Order ID: {}, 현재 상태: {}, 현재 시도 ID: {}, 이벤트 시도 ID: {}",
+                        event.getOrderId(), order.getOrderStatus(), order.getApprovalAttemptId(), event.getApprovalAttemptId());
+                return;
+            }
+
+            // 배송 중 상태로 롤백
+            order.rollbackToShipping();
+            orderRepository.save(order);
+
+            log.info("=== WebSocket 입고 처리 실패 롤백 완료 === Order ID: {}, Status: {}",
+                    event.getOrderId(), order.getOrderStatus());
+
+            // WebSocket으로 실패 알림
+            orderWebSocketHandler.sendOrderStatusUpdate(
+                    event.getOrderId(),
+                    OrderStatus.SHIPPING,
+                    "FAILED",
+                    "입고 처리에 실패했습니다: " + event.getErrorMessage(),
+                    event.getData()
+            );
+
+        } catch (Exception e) {
+            log.error("WebSocket 입고 처리 실패 처리 중 오류 발생 - Order ID: {}, 에러: {}",
+                    event.getOrderId(), e.getMessage(), e);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -474,11 +693,11 @@ public class OrderService {
 
             // WebSocket으로 상태 업데이트 전송 (요청자에게만)
             orderWebSocketHandler.sendToUser(
-                    userId, 
-                    orderId, 
-                    OrderStatus.PENDING_APPROVAL, 
-                    "STOCK_DEDUCTION", 
-                    "재고 차감을 요청합니다.", 
+                    userId,
+                    orderId,
+                    OrderStatus.PENDING_APPROVAL,
+                    "STOCK_DEDUCTION",
+                    "재고 차감을 요청합니다.",
                     null
             );
 
@@ -506,29 +725,29 @@ public class OrderService {
                 log.info("재고 차감 요청 이벤트 발행 완료 - Order ID: {}, Attempt ID: {}", orderId, approvalAttemptId);
             } catch (Exception e) {
                 log.error("Kafka 이벤트 발행 실패 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
-                
+
                 // Kafka 발행 실패 시 롤백
                 orderTransactionService.rollbackOrderToCompleted(orderId);
-                
+
                 // WebSocket으로 실패 알림
                 orderWebSocketHandler.sendOrderStatusUpdate(
-                        orderId, 
-                        OrderStatus.ORDER_COMPLETED, 
-                        "ERROR", 
-                        "주문 승인 처리 중 오류가 발생했습니다.", 
+                        orderId,
+                        OrderStatus.ORDER_COMPLETED,
+                        "ERROR",
+                        "주문 승인 처리 중 오류가 발생했습니다.",
                         null
                 );
             }
 
         } catch (Exception e) {
             log.error("WebSocket 주문 승인 처리 중 오류 발생 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
-            
+
             // WebSocket으로 에러 알림
             orderWebSocketHandler.sendOrderStatusUpdate(
-                    orderId, 
-                    OrderStatus.REJECTED, 
-                    "ERROR", 
-                    "주문 승인 처리 중 오류가 발생했습니다: " + e.getMessage(), 
+                    orderId,
+                    OrderStatus.REJECTED,
+                    "ERROR",
+                    "주문 승인 처리 중 오류가 발생했습니다: " + e.getMessage(),
                     null
             );
         }
@@ -537,7 +756,7 @@ public class OrderService {
     // WebSocket 기반 재고 차감 성공 처리
     @Transactional
     public void handleStockDeductionSuccessWebSocket(StockDeductionSuccessEvent event) {
-        log.info("=== WebSocket 재고 차감 성공 처리 시작 === Order ID: {}, Attempt ID: {}", 
+        log.info("=== WebSocket 재고 차감 성공 처리 시작 === Order ID: {}, Attempt ID: {}",
                 event.getOrderId(), event.getApprovalAttemptId());
 
         try {
@@ -559,15 +778,15 @@ public class OrderService {
             order.approve();
             orderRepository.save(order);
 
-            log.info("=== WebSocket 주문 승인 완료 === Order ID: {}, Status: {}", 
+            log.info("=== WebSocket 주문 승인 완료 === Order ID: {}, Status: {}",
                     event.getOrderId(), order.getOrderStatus());
 
             // WebSocket으로 성공 알림
             orderWebSocketHandler.sendOrderStatusUpdate(
-                    event.getOrderId(), 
-                    OrderStatus.PENDING_SHIPPING, 
-                    "COMPLETED", 
-                    "주문 승인이 완료되었습니다.", 
+                    event.getOrderId(),
+                    OrderStatus.PENDING_SHIPPING,
+                    "COMPLETED",
+                    "주문 승인이 완료되었습니다.",
                     null
             );
 
@@ -579,7 +798,7 @@ public class OrderService {
     // WebSocket 기반 재고 차감 실패 처리
     @Transactional
     public void handleStockDeductionFailedWebSocket(StockDeductionFailedEvent event) {
-        log.info("=== WebSocket 재고 차감 실패 처리 시작 === Order ID: {}, Attempt ID: {}", 
+        log.info("=== WebSocket 재고 차감 실패 처리 시작 === Order ID: {}, Attempt ID: {}",
                 event.getOrderId(), event.getApprovalAttemptId());
 
         try {
@@ -604,16 +823,95 @@ public class OrderService {
 
             // WebSocket으로 실패 알림
             orderWebSocketHandler.sendOrderStatusUpdate(
-                    event.getOrderId(), 
-                    OrderStatus.ORDER_COMPLETED, 
-                    "FAILED", 
-                    "재고 부족으로 주문 승인이 실패했습니다.", 
+                    event.getOrderId(),
+                    OrderStatus.ORDER_COMPLETED,
+                    "FAILED",
+                    "재고 부족으로 주문 승인이 실패했습니다.",
                     event.getData()
             );
 
         } catch (Exception e) {
-            log.error("WebSocket 재고 차감 실패 처리 중 오류 발생 - Order ID: {}, 에러: {}", 
+            log.error("WebSocket 재고 차감 실패 처리 중 오류 발생 - Order ID: {}, 에러: {}",
                     event.getOrderId(), e.getMessage(), e);
+        }
+    }
+
+    // 입고 히스토리 등록 성공 WebSocket 처리
+    public void handleReceivingHistorySuccessWebSocket(ReceivingHistorySuccessEvent event) {
+        log.info("=== WebSocket 입고 히스토리 등록 성공 처리 시작 === Order ID: {}, Attempt ID: {}",
+                event.getOrderId(), event.getApprovalAttemptId());
+
+        try {
+            Order order = orderRepository.findById(event.getOrderId()).orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
+
+            // 상태 및 Attempt ID 검증
+            if (order.getOrderStatus() != OrderStatus.PENDING_RECEIVING) {
+                log.warn("주문 상태가 PENDING_RECEIVING이 아님 - Order ID: {}, Current Status: {}", event.getOrderId(), order.getOrderStatus());
+                return;
+            }
+
+            if (!event.getApprovalAttemptId().equals(order.getApprovalAttemptId())) {
+                log.warn("승인 시도 ID가 일치하지 않음 - Order ID: {}, Event Attempt ID: {}, Order Attempt ID: {}", event.getOrderId(), event.getApprovalAttemptId(), order.getApprovalAttemptId());
+                return;
+            }
+
+            // 히스토리 등록 성공 로그
+            log.info("입고 히스토리 등록 성공 - Order ID: {}, Order Number: {}", event.getOrderId(), event.getOrderNumber());
+
+            // WebSocket으로 성공 알림 (상태는 변경하지 않음, Parts 서버 결과를 기다림)
+            orderWebSocketHandler.sendOrderStatusUpdate(
+                    event.getOrderId(),
+                    OrderStatus.PENDING_RECEIVING,
+                    "HISTORY_SUCCESS",
+                    "입고 히스토리 등록이 완료되었습니다.",
+                    null
+            );
+
+            log.info("=== WebSocket 입고 히스토리 등록 성공 처리 완료 === Order ID: {}", event.getOrderId());
+
+        } catch (Exception e) {
+            log.error("WebSocket 입고 히스토리 등록 성공 처리 중 오류 발생 - Order ID: {}, 에러: {}", event.getOrderId(), e.getMessage(), e);
+        }
+    }
+
+    // 입고 히스토리 등록 실패 WebSocket 처리
+    public void handleReceivingHistoryFailedWebSocket(ReceivingHistoryFailedEvent event) {
+        log.info("=== WebSocket 입고 히스토리 등록 실패 처리 시작 === Order ID: {}, Attempt ID: {}, 에러: {}",
+                event.getOrderId(), event.getApprovalAttemptId(), event.getErrorMessage());
+
+        try {
+            Order order = orderRepository.findById(event.getOrderId()).orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
+
+            // 상태 및 Attempt ID 검증
+            if (order.getOrderStatus() != OrderStatus.PENDING_RECEIVING) {
+                log.warn("주문 상태가 PENDING_RECEIVING이 아님 - Order ID: {}, Current Status: {}", event.getOrderId(), order.getOrderStatus());
+                return;
+            }
+
+            if (!event.getApprovalAttemptId().equals(order.getApprovalAttemptId())) {
+                log.warn("승인 시도 ID가 일치하지 않음 - Order ID: {}, Event Attempt ID: {}, Order Attempt ID: {}", event.getOrderId(), event.getApprovalAttemptId(), order.getApprovalAttemptId());
+                return;
+            }
+
+            // 주문을 SHIPPING으로 롤백
+            order.rollbackToShipping();
+            orderRepository.save(order);
+
+            log.info("입고 히스토리 등록 실패로 인한 주문 상태 롤백 - Order ID: {}, New Status: {}", event.getOrderId(), order.getOrderStatus());
+
+            // WebSocket으로 실패 알림
+            orderWebSocketHandler.sendOrderStatusUpdate(
+                    event.getOrderId(),
+                    OrderStatus.SHIPPING,
+                    "HISTORY_FAILED",
+                    "입고 히스토리 등록에 실패했습니다: " + event.getErrorMessage(),
+                    null
+            );
+
+            log.info("=== WebSocket 입고 히스토리 등록 실패 처리 완료 === Order ID: {}", event.getOrderId());
+
+        } catch (Exception e) {
+            log.error("WebSocket 입고 히스토리 등록 실패 처리 중 오류 발생 - Order ID: {}, 에러: {}", event.getOrderId(), e.getMessage(), e);
         }
     }
 

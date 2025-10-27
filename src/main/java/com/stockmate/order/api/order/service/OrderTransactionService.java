@@ -59,5 +59,35 @@ public class OrderTransactionService {
             log.info("Kafka 발행 실패로 주문 상태 복원 - Order ID: {}, Status: ORDER_COMPLETED", orderId);
         }
     }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void updateOrderStatusToReceiving(Long orderId, String attemptId) {
+        log.info("주문 상태를 입고 대기로 변경 시작 - Order ID: {}, Attempt ID: {}", orderId, attemptId);
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
+
+        if (order.getOrderStatus() != OrderStatus.SHIPPING) {
+            throw new BadRequestException(ErrorStatus.INVALID_ORDER_STATUS_FOR_RECEIVING.getMessage());
+        }
+
+        order.startReceiving(attemptId);
+        orderRepository.save(order);
+
+        log.info("주문 상태를 입고 대기로 변경 완료 - Order ID: {}, Status: {}", orderId, order.getOrderStatus());
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void rollbackOrderToShipping(Long orderId) {
+        log.info("주문 상태를 배송 중으로 롤백 시작 - Order ID: {}", orderId);
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
+
+        order.rollbackToShipping();
+        orderRepository.save(order);
+
+        log.info("주문 상태를 배송 중으로 롤백 완료 - Order ID: {}, Status: {}", orderId, order.getOrderStatus());
+    }
 }
 

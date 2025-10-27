@@ -113,6 +113,15 @@ public class OrderController {
         return ApiResponse.success(SuccessStatus.SEND_ORDER_DETAIL_SUCCESS, response);
     }
 
+    @Operation(summary = "주문 검증 조회 API", description = "주문 ID로 검증 데이터를 조회합니다.")
+    @GetMapping("validate/{orderId}")
+    public ResponseEntity<ApiResponse<OrderValidateDTO>> getValidateOrder(@PathVariable Long orderId, @AuthenticationPrincipal SecurityUser securityUser) {
+        log.info("주문 검증 조회 요청 - Order ID: {}, 요청자 ID: {}", orderId, securityUser.getMemberId());
+
+        OrderValidateDTO response = orderService.getValidateOrder(orderId, securityUser.getMemberId());
+        return ApiResponse.success(SuccessStatus.CHECK_ORDER_DATA_SUCCESS, response);
+    }
+
     @Operation(summary = "배송 등록 API", description = "주문에 배송 정보를 등록합니다. WAREHOUSE 역할만 가능합니다.")
     @PostMapping("/shipping")
     public ResponseEntity<ApiResponse<ShippingRegistrationResponseDTO>> registerShipping(@RequestBody ShippingRegistrationRequestDTO requestDTO, @AuthenticationPrincipal SecurityUser securityUser) {
@@ -123,6 +132,18 @@ public class OrderController {
         log.info("배송 등록 완료 - Order Number: {}, Tracking Number: {}", requestDTO.getOrderNumber(), shippingInfo.getTrackingNumber());
 
         return ApiResponse.success(SuccessStatus.REGISTER_SHIPPING_SUCCESS, shippingInfo);
+    }
+
+    @Operation(summary = "입고 처리 요청 API", description = "주문에 입고 처리를 요청합니다. 가맹점 사용자만 가능합니다.")
+    @PostMapping("/receive")
+    public ResponseEntity<ApiResponse<Void>> requestReceivingProcess(@RequestBody ReceivingProcessRequestDTO requestDTO, @AuthenticationPrincipal SecurityUser securityUser) {
+
+        log.info("입고 처리 요청 - Order Number: {}, 요청자 ID: {}, 요청자 Role: {}", requestDTO.getOrderNumber(), securityUser.getMemberId(), securityUser.getRole());
+
+        orderService.requestReceivingProcess(requestDTO, securityUser.getRole(), securityUser.getMemberId());
+        log.info("입고 처리 요청 완료 - Order Number: {}", requestDTO.getOrderNumber());
+
+        return ApiResponse.success(SuccessStatus.REQUEST_RECEIVING_PROCESS_SUCCESS, null);
     }
 
     @Operation(summary = "내 주문 리스트 조회 API", description = "내가 생성한 주문 리스트를 조회합니다.")
