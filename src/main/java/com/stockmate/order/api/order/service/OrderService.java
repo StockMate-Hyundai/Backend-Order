@@ -23,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -113,7 +115,7 @@ public class OrderService {
         );
     }
 
-    @Transactional
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT) // 이벤트 발행을 트랜잭션 이후로
     public void cancelOrder(Long orderId, Long memberId, Role role) {
         log.info("주문 취소 요청 - Order ID: {}, Member ID: {}, Role: {}", orderId, memberId, role);
 
@@ -140,6 +142,19 @@ public class OrderService {
                 order.getOrderStatus() == OrderStatus.RECEIVED)) {
             log.warn("취소 불가능한 상태 - Order ID: {}, Status: {}", orderId, order.getOrderStatus());
             throw new BadRequestException(ErrorStatus.ALREADY_SHIPPED_OR_DELIVERED_ORDER_EXCEPTION.getMessage());
+        }
+
+        CancelRequestEvent cancelRequestEvent = CancelRequestEvent.of(order, memberId);
+
+        try {
+            kafkaProducerService.sendCancelRequest(cancelRequestEvent);
+            log.info("결제 취소 요청 이벤트 발송 완료 - Order ID: {}, 금액: {}",
+                    order.getOrderId(), order.getTotalPrice());
+        } catch (Exception e) {
+            log.error("결제 취소 요청 이벤트 발송 실패 - Order ID: {}", order.getOrderId(), e);
+            Order failedOrder = order.toBuilder().orderStatus(OrderStatus.FAILED).build();
+            orderRepository.save(failedOrder);
+            throw new BadRequestException("결제 취소 요청 처리 중 오류가 발생했습니다.");
         }
 
         order.cancel();
