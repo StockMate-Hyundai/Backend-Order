@@ -392,9 +392,42 @@ public class OrderService {
                     .items(items)
                     .build();
 
-            // Kafka로 입고 처리 요청 이벤트 발행
-            kafkaProducerService.sendReceivingProcessRequest(event);
-            log.info("입고 처리 요청 이벤트 발행 완료 - Order ID: {}, Attempt ID: {}", order.getOrderId(), attemptId);
+            // Parts 서버로 직접 API 호출하여 재고 업데이트 (InventoryService 사용)
+            try {
+                // DTO를 Map으로 변환
+                List<Map<String, Object>> itemList = items.stream()
+                        .map(item -> {
+                            Map<String, Object> itemMap = new HashMap<>();
+                            itemMap.put("partId", item.getPartId());
+                            itemMap.put("quantity", item.getQuantity());
+                            return itemMap;
+                        })
+                        .collect(Collectors.toList());
+                
+                inventoryService.updateStoreInventory(order.getMemberId(), itemList);
+                log.info("Parts 서버 재고 업데이트 완료 - Order ID: {}, Attempt ID: {}", order.getOrderId(), attemptId);
+                
+                // 재고 업데이트 성공 시 주문 상태를 RECEIVED로 변경
+                order.completeReceiving();
+                orderRepository.save(order);
+                
+            } catch (Exception partsException) {
+                log.error("Parts 서버 재고 업데이트 실패 - Order ID: {}, 에러: {}", order.getOrderId(), partsException.getMessage(), partsException);
+                
+                // 실패 시 롤백
+                orderTransactionService.rollbackOrderToShipping(order.getOrderId());
+                
+                // WebSocket으로 실패 알림
+                orderWebSocketHandler.sendOrderStatusUpdate(
+                        order.getOrderId(),
+                        OrderStatus.SHIPPING,
+                        "ERROR",
+                        "재고 업데이트 중 오류가 발생했습니다.",
+                        null
+                );
+                
+                throw new InternalServerException("재고 업데이트 실패: " + partsException.getMessage());
+            }
 
             // Information 서버로 입고 히스토리 등록 이벤트 발행
             String message = String.format("%s 주문 입고처리 되었습니다.", order.getOrderNumber());

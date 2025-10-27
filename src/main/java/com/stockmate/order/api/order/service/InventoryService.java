@@ -153,6 +153,34 @@ public class InventoryService {
         }
     }
 
+    // 가맹점 부품 재고 업데이트 (입고 처리)
+    public void updateStoreInventory(Long memberId, List<Map<String, Object>> items) {
+        log.info("Parts 서버 재고 업데이트 API 호출 - 가맹점 ID: {}, 아이템 수: {}", memberId, items.size());
+
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("memberId", memberId);
+        requestBody.put("items", items);
+
+        try {
+            String response = webClient.post()
+                    .uri(inventoryServerUrl + "/api/v1/store/inventory/update")
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            log.info("Parts 서버 재고 업데이트 성공 - 응답: {}", response);
+            
+        } catch (WebClientResponseException e) {
+            log.error("Parts 서버 재고 업데이트 실패 - Status: {}, Response: {}", 
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            throw new InternalServerException("Parts 서버 재고 업데이트 실패: " + e.getMessage());
+        } catch (Exception e) {
+            log.error("Parts 서버 재고 업데이트 중 예외 발생 - Error: {}", e.getMessage(), e);
+            throw new InternalServerException("Parts 서버 재고 업데이트 실패: " + e.getMessage());
+        }
+    }
+
     // Circuit Breaker Fallback 메서드들
     // private InventoryCheckResponseDTO checkInventoryFallback(List<OrderItemCheckRequestDTO> orderItems, Exception e) {
     //     return inventoryServiceFallback.checkInventoryFallback(orderItems, e);
