@@ -134,6 +134,18 @@ public class OrderController {
         return ApiResponse.success(SuccessStatus.REGISTER_SHIPPING_SUCCESS, shippingInfo);
     }
 
+    @Operation(summary = "입고 처리 요청 API", description = "주문에 입고 처리를 요청합니다. 가맹점 사용자만 가능합니다.")
+    @PostMapping("/receive")
+    public ResponseEntity<ApiResponse<Void>> requestReceivingProcess(@RequestBody ReceivingProcessRequestDTO requestDTO, @AuthenticationPrincipal SecurityUser securityUser) {
+
+        log.info("입고 처리 요청 - Order Number: {}, 요청자 ID: {}, 요청자 Role: {}", requestDTO.getOrderNumber(), securityUser.getMemberId(), securityUser.getRole());
+
+        orderService.requestReceivingProcess(requestDTO, securityUser.getRole(), securityUser.getMemberId());
+        log.info("입고 처리 요청 완료 - Order Number: {}", requestDTO.getOrderNumber());
+
+        return ApiResponse.success(SuccessStatus.REQUEST_RECEIVING_PROCESS_SUCCESS, null);
+    }
+
     @Operation(summary = "내 주문 리스트 조회 API", description = "내가 생성한 주문 리스트를 조회합니다.")
     @GetMapping("/list/my")
     public ResponseEntity<ApiResponse<OrderListResponseDTO>> getMyOrderList(

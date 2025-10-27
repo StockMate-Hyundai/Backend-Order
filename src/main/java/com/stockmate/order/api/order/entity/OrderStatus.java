@@ -12,6 +12,7 @@ public enum OrderStatus {
     FAILED("FAILED"), // 결제 실패
     PENDING_SHIPPING("PENDING_SHIPPING"), // 출고 대기
     SHIPPING("SHIPPING"), // 배송중
+    PENDING_RECEIVING("PENDING_RECEIVING"), // 입고 대기
     REJECTED("REJECTED"), // 출고 반려
     DELIVERED("DELIVERED"), // 배송 완료
     RECEIVED("RECEIVED"), // 입고 완료
