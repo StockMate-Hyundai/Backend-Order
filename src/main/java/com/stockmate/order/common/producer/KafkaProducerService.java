@@ -26,6 +26,9 @@ public class KafkaProducerService {
     @Value("${kafka.topics.pay-request}")
     private String payRequestTopic;
 
+    @Value("${kafka.topics.cancel-request}")
+    private String cancelRequestTopic;
+
     @Value("${kafka.topics.receiving-process-request}")
     private String receivingProcessRequestTopic;
 
@@ -99,6 +102,28 @@ public class KafkaProducerService {
                         event.getOrderId());
             } else {
                 log.error("결제 요청 이벤트 발송 실패 - Order ID: {}, 에러: {}",
+                        event.getOrderId(), ex.getMessage(), ex);
+            }
+        });
+    }
+
+    // 결체 취소 요청 이벤트 발송
+    public void sendCancelRequest(CancelRequestEvent event) {
+        CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(
+                cancelRequestTopic,
+                event.getOrderId().toString(),
+                event
+        );
+
+        future.whenComplete((result,  ex) -> {
+            if (ex == null) {
+                log.info("결제 취소 요청 이벤트 발송 성공 - 토픽: {}, 파티션: {}, 오프셋: {}, Order ID: {}",
+                        result.getRecordMetadata().topic(),
+                        result.getRecordMetadata().partition(),
+                        result.getRecordMetadata().offset(),
+                        event.getOrderId());
+            } else {
+                log.error("결제 취소 요청 이벤트 발송 실패 - Order ID: {}, 에러: {}",
                         event.getOrderId(), ex.getMessage(), ex);
             }
         });
