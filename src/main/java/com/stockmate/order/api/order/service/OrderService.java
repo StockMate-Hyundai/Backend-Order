@@ -149,6 +149,25 @@ public class OrderService {
                 orderId, order.getOrderNumber(), role);
     }
 
+    // 결제 성공 or 실패 이벤트 처리
+    @Transactional
+    public void changeOrderStatus(Long orderId, String orderStatus) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> {
+                    log.error("주문을 찾을 수 없음 - Order ID: {}", orderId);
+                    return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
+                });
+
+        try {
+            OrderStatus newStatus = OrderStatus.valueOf(orderStatus); // 문자열 → Enum 변환
+            order.setOrderStatus(newStatus); // setter 호출
+            log.info("✅ 주문 상태 변경 완료 - Order ID: {}, 상태: {}", orderId, newStatus);
+        } catch (IllegalArgumentException e) {
+            log.error("❌ 잘못된 주문 상태 입력: {}", orderStatus);
+            throw new BadRequestException("유효하지 않은 주문 상태 값입니다: " + orderStatus);
+        }
+    }
+
     @Transactional
     public void deleteOrder(Long orderId, SecurityUser securityUser) {
         Role role = securityUser.getRole();
