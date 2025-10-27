@@ -62,7 +62,7 @@ public class OrderService {
         } catch (IllegalArgumentException e) {
             throw new BadRequestException("유효하지 않은 결제 방식입니다.");
         }
-        
+
         Order order = Order.builder()
                 .totalPrice(checkResult.getTotalPrice())
                 .paymentType(paymentType)
@@ -93,12 +93,18 @@ public class OrderService {
                 .build();
         Order finalOrder = orderRepository.save(updatedOrder);
 
-        PayRequestEvent payRequestEvent = PayRequestEvent.builder()
-                .orderId(finalOrder.getOrderId())
-                .orderNumber(finalOrder.getOrderNumber())
-                .totalPrice(finalOrder.getTotalPrice())
-                .build();
+        PayRequestEvent payRequestEvent = PayRequestEvent.of(finalOrder, memberId);
 
+        try {
+            kafkaProducerService.sendPayRequest(payRequestEvent);
+            log.info("결제 요청 이벤트 발송 완료 - Order ID: {}, 금액: {}",
+                    finalOrder.getOrderId(), finalOrder.getTotalPrice());
+        } catch (Exception e) {
+            log.error("결제 요청 이벤트 발송 실패 - Order ID: {}", finalOrder.getOrderId(), e);
+            Order failedOrder = finalOrder.toBuilder().orderStatus(OrderStatus.FAILED).build();
+            orderRepository.save(failedOrder);
+            throw new BadRequestException("결제 요청 처리 중 오류가 발생했습니다.");
+        }
 
         log.info("부품 발주 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}",
                 finalOrder.getOrderId(), finalOrder.getOrderNumber(), finalOrder.getMemberId(),
