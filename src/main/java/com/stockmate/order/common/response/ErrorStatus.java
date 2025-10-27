@@ -36,6 +36,7 @@ public enum ErrorStatus {
      */
     USER_NOTFOUND_EXCEPTION(HttpStatus.NOT_FOUND,"해당 사용자를 찾을 수 없습니다."),
     ORDER_NOT_FOUND_EXCEPTION(HttpStatus.NOT_FOUND,"해당 주문을 찾을 수 없습니다."),
+    CART_ITEM_NOT_FOUND_EXCEPTION(HttpStatus.NOT_FOUND, "해당 부품이 없습니다."),
 
     /**
      * 500 SERVER_ERROR

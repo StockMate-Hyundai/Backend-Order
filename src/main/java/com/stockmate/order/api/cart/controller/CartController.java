@@ -55,6 +55,19 @@ public class CartController {
         return ApiResponse.success(SuccessStatus.SEND_CART_DATA_SUCCESS, response);
     }
 
+    @Operation(summary = "장바구니 특정 부품 삭제 API", description = "장바구니에서 특정 부품을 삭제합니다.")
+    @DeleteMapping("/cart/item/{partId}")
+    public ResponseEntity<ApiResponse<Void>> removeItemFromCart(
+            @PathVariable Long partId,
+            @AuthenticationPrincipal SecurityUser securityUser) {
+
+        log.info("장바구니 특정 부품 삭제 요청 - Member ID: {}, Part ID: {}", securityUser.getMemberId(), partId);
+        cartService.removeItemFromCart(securityUser.getMemberId(), partId);
+
+        log.info("장바구니 특정 부품 삭제 완료 - Member ID: {}, Part ID: {}", securityUser.getMemberId(), partId);
+        return ApiResponse.success_only(SuccessStatus.SEND_CART_DELETE_SUCCESS);
+    }
+
     @Operation(summary = "장바구니 전체 비우기 API", description = "장바구니의 모든 아이템을 삭제합니다.")
     @DeleteMapping("/cart")
     public ResponseEntity<ApiResponse<Void>> clearCart(@AuthenticationPrincipal SecurityUser securityUser) {
