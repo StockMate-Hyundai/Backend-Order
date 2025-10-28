@@ -27,11 +27,13 @@ public class OrderController {
 
     @Operation(summary = "주문 생성 API", description = "본사에 있는 부품들을 발주합니다.")
     @PostMapping
-    public ResponseEntity<ApiResponse<Void>> makeOrder(@RequestBody OrderRequestDTO orderRequestDTO, @AuthenticationPrincipal SecurityUser securityUser) {
+    public ResponseEntity<ApiResponse<OrderCreateResponseDTO>> makeOrder(@RequestBody OrderRequestDTO orderRequestDTO, @AuthenticationPrincipal SecurityUser securityUser) {
         log.info("부품 발주 요청 - 요청 가맹점 ID: {}, 주문 항목 수: {}", securityUser.getMemberId(), orderRequestDTO.getOrderItems().size());
 
-        orderService.makeOrder(orderRequestDTO, securityUser.getMemberId());
-        return ApiResponse.success_only(SuccessStatus.SEND_PARTS_ORDER_SUCCESS);
+        OrderCreateResponseDTO response = orderService.makeOrder(orderRequestDTO, securityUser.getMemberId());
+        log.info("부품 발주 완료 - Order ID: {}, Order Number: {}", response.getOrderId(), response.getOrderNumber());
+        
+        return ApiResponse.success(SuccessStatus.SEND_PARTS_ORDER_SUCCESS, response);
     }
 
     @Operation(summary = "주문 취소 API", description = "생성한 주문을 취소합니다. (본인 주문 또는 ADMIN/SUPER_ADMIN)")

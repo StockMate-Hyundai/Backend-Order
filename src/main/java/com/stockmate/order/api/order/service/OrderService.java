@@ -43,7 +43,7 @@ public class OrderService {
 
 
     @Transactional
-    public void makeOrder(OrderRequestDTO orderRequestDTO, Long memberId) {
+    public OrderCreateResponseDTO makeOrder(OrderRequestDTO orderRequestDTO, Long memberId) {
         log.info("부품 발주 시작 - Member ID: {}, 주문 항목 수: {}",
                 memberId, orderRequestDTO.getOrderItems().size());
 
@@ -113,6 +113,14 @@ public class OrderService {
                 finalOrder.getOrderItems().size(), checkResult.getTotalPrice(),
                 finalOrder.getOrderStatus()
         );
+
+        // 응답 DTO 생성
+        return OrderCreateResponseDTO.builder()
+                .orderId(finalOrder.getOrderId())
+                .orderNumber(finalOrder.getOrderNumber())
+                .totalPrice(finalOrder.getTotalPrice())
+                .orderStatus(finalOrder.getOrderStatus().name())
+                .build();
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT) // 이벤트 발행을 트랜잭션 이후로
