@@ -51,6 +51,7 @@ public class KafkaConfig {
         classIdMapping.put("receivingHistoryRequest", ReceivingHistoryRequestEvent.class);
         classIdMapping.put("receivingHistorySuccess", ReceivingHistorySuccessEvent.class);
         classIdMapping.put("receivingHistoryFailed", ReceivingHistoryFailedEvent.class);
+        classIdMapping.put("sendPayRequest", PayRequestEvent.class);
         classIdMapping.put("sendCancelRequest", CancelRequestEvent.class);
         typeMapper.setIdClassMapping(classIdMapping);
         jsonSerializer.setTypeMapper(typeMapper);
