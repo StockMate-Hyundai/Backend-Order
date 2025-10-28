@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class payResponseEvent {
+public class PayResponseEvent {
     private Long orderId;
     private String orderNumber;
     private String approvalAttemptId; // Saga 시도 식별자
