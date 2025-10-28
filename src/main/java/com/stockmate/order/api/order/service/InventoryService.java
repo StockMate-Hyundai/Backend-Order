@@ -153,6 +153,35 @@ public class InventoryService {
         }
     }
 
+    // 본사 재고 차감 (주문 승인용)
+    public void deductStock(Long orderId, String orderNumber, List<Map<String, Object>> items) {
+        log.info("Parts 서버 재고 차감 API 호출 - Order ID: {}, Order Number: {}, 아이템 수: {}", orderId, orderNumber, items.size());
+
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("orderId", orderId);
+        requestBody.put("orderNumber", orderNumber);
+        requestBody.put("items", items);
+
+        try {
+            String response = webClient.post()
+                    .uri(inventoryServerUrl + "/api/v1/parts/deduct-stock")
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            log.info("Parts 서버 재고 차감 성공 - 응답: {}", response);
+            
+        } catch (WebClientResponseException e) {
+            log.error("Parts 서버 재고 차감 실패 - Status: {}, Response: {}", 
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            throw new InternalServerException("Parts 서버 재고 차감 실패: " + e.getMessage());
+        } catch (Exception e) {
+            log.error("Parts 서버 재고 차감 중 예외 발생 - Error: {}", e.getMessage(), e);
+            throw new InternalServerException("Parts 서버 재고 차감 실패: " + e.getMessage());
+        }
+    }
+
     // 가맹점 부품 재고 업데이트 (입고 처리)
     public void updateStoreInventory(Long memberId, List<Map<String, Object>> items) {
         log.info("Parts 서버 재고 업데이트 API 호출 - 가맹점 ID: {}, 아이템 수: {}", memberId, items.size());

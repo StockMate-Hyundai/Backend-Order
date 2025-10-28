@@ -43,16 +43,7 @@ public class KafkaConfig {
         typeMapper.setTypePrecedence(Jackson2JavaTypeMapper.TypePrecedence.TYPE_ID);
 
         Map<String, Class<?>> classIdMapping = new HashMap<>();
-        classIdMapping.put("stockDeductionRequest", StockDeductionRequestEvent.class);
-        classIdMapping.put("stockRestoreRequest", StockRestoreRequestEvent.class);
-        classIdMapping.put("receivingProcessRequest", ReceivingProcessRequestEvent.class);
-        classIdMapping.put("receivingProcessSuccess", ReceivingProcessSuccessEvent.class);
-        classIdMapping.put("receivingProcessFailed", ReceivingProcessFailedEvent.class);
         classIdMapping.put("receivingHistoryRequest", ReceivingHistoryRequestEvent.class);
-        classIdMapping.put("receivingHistorySuccess", ReceivingHistorySuccessEvent.class);
-        classIdMapping.put("receivingHistoryFailed", ReceivingHistoryFailedEvent.class);
-        classIdMapping.put("sendPayRequest", PayRequestEvent.class);
-        classIdMapping.put("sendCancelRequest", CancelRequestEvent.class);
         typeMapper.setIdClassMapping(classIdMapping);
         jsonSerializer.setTypeMapper(typeMapper);
 
@@ -74,8 +65,6 @@ public class KafkaConfig {
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
         props.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class.getName());
-        props.put(JsonDeserializer.TRUSTED_PACKAGES, "com.stockmate.order.api.order.dto,com.stockmate.parts.api.parts.dto,com.stockmate.information.api.order.dto");
-        props.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, true); // 타입 헤더 사용
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
         // Consumer용 타입 매핑 설정
@@ -83,15 +72,11 @@ public class KafkaConfig {
         DefaultJackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper();
         
         Map<String, Class<?>> classIdMapping = new HashMap<>();
-        classIdMapping.put("stockDeductionSuccess", StockDeductionSuccessEvent.class);
-        classIdMapping.put("stockDeductionFailed", StockDeductionFailedEvent.class);
-        classIdMapping.put("receivingProcessSuccess", ReceivingProcessSuccessEvent.class);
-        classIdMapping.put("receivingProcessFailed", ReceivingProcessFailedEvent.class);
         classIdMapping.put("receivingHistorySuccess", ReceivingHistorySuccessEvent.class);
         classIdMapping.put("receivingHistoryFailed", ReceivingHistoryFailedEvent.class);
         typeMapper.setIdClassMapping(classIdMapping);
         jsonDeserializer.setTypeMapper(typeMapper);
-        jsonDeserializer.addTrustedPackages("com.stockmate.order.api.order.dto,com.stockmate.parts.api.parts.dto,com.stockmate.information.api.order.dto");
+        jsonDeserializer.addTrustedPackages("com.stockmate.order.api.order.dto");
 
         log.info("Kafka Consumer Factory 설정 완료 - Bootstrap Servers: {}", bootstrapServers);
         return new DefaultKafkaConsumerFactory<>(props, new StringDeserializer(), new ErrorHandlingDeserializer<>(jsonDeserializer));
