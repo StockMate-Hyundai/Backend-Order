@@ -460,20 +460,16 @@ public class OrderService {
                 order.completeReceiving();
                 orderRepository.save(order);
                 
-                // Information 서버로 입고 히스토리 등록 이벤트 발행
+                // Information 서버로 입고 히스토리 등록 API 호출
                 String message = String.format("%s 주문 입고처리 되었습니다.", order.getOrderNumber());
                 
-                ReceivingHistoryRequestEvent historyEvent = ReceivingHistoryRequestEvent.builder()
-                        .orderId(order.getOrderId()) // 주문 ID
-                        .approvalAttemptId(attemptId) // 승인 시도 ID
-                        .memberId(order.getMemberId()) // 가맹점 ID
-                        .orderNumber(order.getOrderNumber()) // 주문 번호
-                        .message(message) // 메시지
-                        .status("RECEIVED") // 상태
-                        .build();
-
-                kafkaProducerService.sendReceivingHistoryRequest(historyEvent);
-                log.info("입고 히스토리 등록 이벤트 발행 완료 - Order Number: {}, 가맹점 ID: {}", order.getOrderNumber(), order.getMemberId());
+                inventoryService.registerReceivingHistory(
+                        order.getMemberId(), // 가맹점 ID
+                        order.getOrderNumber(), // 주문 번호
+                        message, // 메시지
+                        "RECEIVED" // 상태
+                );
+                log.info("입고 히스토리 등록 완료 - Order Number: {}, 가맹점 ID: {}", order.getOrderNumber(), order.getMemberId());
 
                 // WebSocket으로 상태 업데이트 전송 (요청자에게만)
                 orderWebSocketHandler.sendToUser(
@@ -845,88 +841,9 @@ public class OrderService {
                     orderId,
                     OrderStatus.REJECTED,
                     "ERROR",
-                    "주문 승인 처리 중 오류가 발생했습니다: " + e.getMessage(),
+                    "주문 승인 처리 중 예상치 못한 오류가 발생했습니다: " + e.getMessage(),
                     null
             );
-        }
-    }
-
-    // 입고 히스토리 등록 성공 WebSocket 처리
-    public void handleReceivingHistorySuccessWebSocket(ReceivingHistorySuccessEvent event) {
-        log.info("=== WebSocket 입고 히스토리 등록 성공 처리 시작 === Order ID: {}, Attempt ID: {}",
-                event.getOrderId(), event.getApprovalAttemptId());
-
-        try {
-            Order order = orderRepository.findById(event.getOrderId()).orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
-
-            // 상태 및 Attempt ID 검증
-            if (order.getOrderStatus() != OrderStatus.PENDING_RECEIVING) {
-                log.warn("주문 상태가 PENDING_RECEIVING이 아님 - Order ID: {}, Current Status: {}", event.getOrderId(), order.getOrderStatus());
-                return;
-            }
-
-            if (!event.getApprovalAttemptId().equals(order.getApprovalAttemptId())) {
-                log.warn("승인 시도 ID가 일치하지 않음 - Order ID: {}, Event Attempt ID: {}, Order Attempt ID: {}", event.getOrderId(), event.getApprovalAttemptId(), order.getApprovalAttemptId());
-                return;
-            }
-
-            // 히스토리 등록 성공 로그
-            log.info("입고 히스토리 등록 성공 - Order ID: {}, Order Number: {}", event.getOrderId(), event.getOrderNumber());
-
-            // WebSocket으로 성공 알림 (상태는 변경하지 않음, Parts 서버 결과를 기다림)
-            orderWebSocketHandler.sendOrderStatusUpdate(
-                    event.getOrderId(),
-                    OrderStatus.PENDING_RECEIVING,
-                    "HISTORY_SUCCESS",
-                    "입고 히스토리 등록이 완료되었습니다.",
-                    null
-            );
-
-            log.info("=== WebSocket 입고 히스토리 등록 성공 처리 완료 === Order ID: {}", event.getOrderId());
-
-        } catch (Exception e) {
-            log.error("WebSocket 입고 히스토리 등록 성공 처리 중 오류 발생 - Order ID: {}, 에러: {}", event.getOrderId(), e.getMessage(), e);
-        }
-    }
-
-    // 입고 히스토리 등록 실패 WebSocket 처리
-    public void handleReceivingHistoryFailedWebSocket(ReceivingHistoryFailedEvent event) {
-        log.info("=== WebSocket 입고 히스토리 등록 실패 처리 시작 === Order ID: {}, Attempt ID: {}, 에러: {}",
-                event.getOrderId(), event.getApprovalAttemptId(), event.getErrorMessage());
-
-        try {
-            Order order = orderRepository.findById(event.getOrderId()).orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
-
-            // 상태 및 Attempt ID 검증
-            if (order.getOrderStatus() != OrderStatus.PENDING_RECEIVING) {
-                log.warn("주문 상태가 PENDING_RECEIVING이 아님 - Order ID: {}, Current Status: {}", event.getOrderId(), order.getOrderStatus());
-                return;
-            }
-
-            if (!event.getApprovalAttemptId().equals(order.getApprovalAttemptId())) {
-                log.warn("승인 시도 ID가 일치하지 않음 - Order ID: {}, Event Attempt ID: {}, Order Attempt ID: {}", event.getOrderId(), event.getApprovalAttemptId(), order.getApprovalAttemptId());
-                return;
-            }
-
-            // 주문을 SHIPPING으로 롤백
-            order.rollbackToShipping();
-            orderRepository.save(order);
-
-            log.info("입고 히스토리 등록 실패로 인한 주문 상태 롤백 - Order ID: {}, New Status: {}", event.getOrderId(), order.getOrderStatus());
-
-            // WebSocket으로 실패 알림
-            orderWebSocketHandler.sendOrderStatusUpdate(
-                    event.getOrderId(),
-                    OrderStatus.SHIPPING,
-                    "HISTORY_FAILED",
-                    "입고 히스토리 등록에 실패했습니다: " + event.getErrorMessage(),
-                    null
-            );
-
-            log.info("=== WebSocket 입고 히스토리 등록 실패 처리 완료 === Order ID: {}", event.getOrderId());
-
-        } catch (Exception e) {
-            log.error("WebSocket 입고 히스토리 등록 실패 처리 중 오류 발생 - Order ID: {}, 에러: {}", event.getOrderId(), e.getMessage(), e);
         }
     }
 

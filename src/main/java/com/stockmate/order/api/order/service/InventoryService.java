@@ -29,6 +29,9 @@ public class InventoryService {
     @Value("${inventory.server.url}")
     private String inventoryServerUrl;
 
+    @Value("${information.server.url}")
+    private String informationServerUrl;
+
     // @CircuitBreaker(name = "partsService", fallbackMethod = "checkInventoryFallback")
     public InventoryCheckResponseDTO checkInventory(List<OrderItemCheckRequestDTO> orderItems) {
         log.info("부품 재고 체크 요청 - 주문 항목 수: {}", orderItems.size());
@@ -207,6 +210,36 @@ public class InventoryService {
         } catch (Exception e) {
             log.error("Parts 서버 재고 업데이트 중 예외 발생 - Error: {}", e.getMessage(), e);
             throw new InternalServerException("Parts 서버 재고 업데이트 실패: " + e.getMessage());
+        }
+    }
+
+    // 입고 히스토리 등록 (Information 서버 API 호출)
+    public void registerReceivingHistory(Long memberId, String orderNumber, String message, String status) {
+        log.info("Information 서버 입고 히스토리 등록 API 호출 - 가맹점 ID: {}, 주문 번호: {}", memberId, orderNumber);
+
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("memberId", memberId);
+        requestBody.put("orderNumber", orderNumber);
+        requestBody.put("message", message);
+        requestBody.put("status", status);
+
+        try {
+            String response = webClient.post()
+                    .uri(informationServerUrl + "/api/v1/information/order-history")
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            log.info("Information 서버 입고 히스토리 등록 성공 - 응답: {}", response);
+            
+        } catch (WebClientResponseException e) {
+            log.error("Information 서버 입고 히스토리 등록 실패 - Status: {}, Response: {}", 
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            throw new InternalServerException("Information 서버 입고 히스토리 등록 실패: " + e.getMessage());
+        } catch (Exception e) {
+            log.error("Information 서버 입고 히스토리 등록 중 예외 발생 - Error: {}", e.getMessage(), e);
+            throw new InternalServerException("Information 서버 입고 히스토리 등록 실패: " + e.getMessage());
         }
     }
 
