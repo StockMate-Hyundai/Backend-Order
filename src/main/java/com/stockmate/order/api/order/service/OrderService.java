@@ -327,6 +327,7 @@ public class OrderService {
                 .memberId(order.getMemberId())
                 .userInfo(userMap.get(order.getMemberId()))
                 .orderItems(orderItemDetails)
+                .paymentType(order.getPaymentType())
                 .etc(order.getEtc())
                 .rejectedMessage(order.getRejectedMessage())
                 .carrier(order.getCarrier())
