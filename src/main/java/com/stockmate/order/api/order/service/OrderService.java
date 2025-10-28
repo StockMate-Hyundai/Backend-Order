@@ -9,6 +9,7 @@ import com.stockmate.order.api.order.repository.OrderRepository;
 import com.stockmate.order.api.websocket.handler.OrderWebSocketHandler;
 import com.stockmate.order.common.config.security.Role;
 import com.stockmate.order.common.config.security.SecurityUser;
+import com.stockmate.order.common.config.webClient.WebClientConfig;
 import com.stockmate.order.common.exception.BadRequestException;
 import com.stockmate.order.common.exception.InternalServerException;
 import com.stockmate.order.common.exception.NotFoundException;
@@ -17,15 +18,18 @@ import com.stockmate.order.common.producer.KafkaProducerService;
 import com.stockmate.order.common.response.ErrorStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -40,10 +44,14 @@ public class OrderService {
     private final KafkaProducerService kafkaProducerService;
     private final OrderTransactionService orderTransactionService;
     private final OrderWebSocketHandler orderWebSocketHandler;
+    private final WebClient webClient;
+
+    @Value("${order.server.url}")
+    private String orderServerUrl;
 
 
     @Transactional
-    public OrderCreateResponseDTO makeOrder(OrderRequestDTO orderRequestDTO, Long memberId) {
+    public OrderResponseDto makeOrder(OrderRequestDTO orderRequestDTO, Long memberId) {
         log.info("부품 발주 시작 - Member ID: {}, 주문 항목 수: {}",
                 memberId, orderRequestDTO.getOrderItems().size());
 
@@ -90,37 +98,69 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
         String orderNumber = "SMO-" + savedOrder.getOrderId();
-        Order updatedOrder = savedOrder.toBuilder()
-                .orderNumber(orderNumber)
-                .build();
-        Order finalOrder = orderRepository.save(updatedOrder);
+        savedOrder.setOrderNumber(orderNumber);
 
-        PayRequestEvent payRequestEvent = PayRequestEvent.of(finalOrder, memberId);
+        PayRequestEvent payRequestEvent = PayRequestEvent.of(savedOrder, memberId);
+
+        // 결제 요청
+        PayResponseEvent payResponse;
 
         try {
-            kafkaProducerService.sendPayRequest(payRequestEvent);
-            log.info("결제 요청 이벤트 발송 완료 - Order ID: {}, 금액: {}",
-                    finalOrder.getOrderId(), finalOrder.getTotalPrice());
+            payResponse = webClient.post()
+                    .uri("/api/v1/payment/pay")
+                    .bodyValue(payRequestEvent)
+                    .retrieve()
+                    .bodyToMono(PayResponseEvent.class)
+                    .timeout(Duration.ofSeconds(5))
+                    .block();
+            log.info("✅ 결제 API 호출 성공 - response: {}", payResponse);
         } catch (Exception e) {
-            log.error("결제 요청 이벤트 발송 실패 - Order ID: {}", finalOrder.getOrderId(), e);
-            Order failedOrder = finalOrder.toBuilder().orderStatus(OrderStatus.FAILED).build();
-            orderRepository.save(failedOrder);
-            throw new BadRequestException("결제 요청 처리 중 오류가 발생했습니다.");
+            log.error("❌ 결제 API 호출 실패 - orderId: {}, error: {}", savedOrder.getOrderId(), e.getMessage());
+            savedOrder.setOrderStatus(OrderStatus.FAILED);
+            orderRepository.save(savedOrder);
+
+            return OrderResponseDto.of(savedOrder, false, "Payment 서버 호출 실패");
         }
 
-        log.info("부품 발주 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}",
-                finalOrder.getOrderId(), finalOrder.getOrderNumber(), finalOrder.getMemberId(),
-                finalOrder.getOrderItems().size(), checkResult.getTotalPrice(),
-                finalOrder.getOrderStatus()
-        );
+        if (payResponse == null) {
+            savedOrder.setOrderStatus(OrderStatus.FAILED);
+            orderRepository.save(savedOrder);
 
-        // 응답 DTO 생성
-        return OrderCreateResponseDTO.builder()
-                .orderId(finalOrder.getOrderId())
-                .orderNumber(finalOrder.getOrderNumber())
-                .totalPrice(finalOrder.getTotalPrice())
-                .orderStatus(finalOrder.getOrderStatus().name())
-                .build();
+            return OrderResponseDto.of(savedOrder, false, "결제 응답이 잘못되었습니다.");
+        }
+
+
+        if (Boolean.TRUE.equals(payResponse.getIsSuccess())) {
+            savedOrder.setOrderStatus(OrderStatus.PAY_COMPLETED);
+            log.info("✅ 결제 성공 - Order ID: {}, Number: {}", savedOrder.getOrderId(), savedOrder.getOrderNumber());
+        } else {
+            savedOrder.setOrderStatus(OrderStatus.FAILED);
+            log.warn("❌ 결제 실패 - Order ID: {}, reason: {}", savedOrder.getOrderId(), payResponse.getEtc());
+        }
+
+        orderRepository.save(savedOrder);
+
+//        try {
+//            kafkaProducerService.sendPayRequest(payRequestEvent);
+//            log.info("결제 요청 이벤트 발송 완료 - Order ID: {}, 금액: {}",
+//                    finalOrder.getOrderId(), finalOrder.getTotalPrice());
+//        } catch (Exception e) {
+//            log.error("결제 요청 이벤트 발송 실패 - Order ID: {}", finalOrder.getOrderId(), e);
+//            Order failedOrder = finalOrder.toBuilder().orderStatus(OrderStatus.FAILED).build();
+//            orderRepository.save(failedOrder);
+//            throw new BadRequestException("결제 요청 처리 중 오류가 발생했습니다.");
+//        }
+
+        log.info("주문 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}",
+                savedOrder.getOrderId(), savedOrder.getOrderNumber(), savedOrder.getMemberId(),
+                savedOrder.getOrderItems().size(), checkResult.getTotalPrice(),
+                savedOrder.getOrderStatus()
+        );
+        return OrderResponseDto.of(
+                savedOrder,
+                Boolean.TRUE.equals(payResponse.getIsSuccess()),
+                payResponse.getEtc()
+        );
     }
 
     @Transactional
