@@ -67,19 +67,8 @@ public class KafkaConfig {
         props.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class.getName());
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
-        // Consumer용 타입 매핑 설정
-        JsonDeserializer<Object> jsonDeserializer = new JsonDeserializer<>();
-        DefaultJackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper();
-        
-        Map<String, Class<?>> classIdMapping = new HashMap<>();
-        classIdMapping.put("receivingHistorySuccess", ReceivingHistorySuccessEvent.class);
-        classIdMapping.put("receivingHistoryFailed", ReceivingHistoryFailedEvent.class);
-        typeMapper.setIdClassMapping(classIdMapping);
-        jsonDeserializer.setTypeMapper(typeMapper);
-        jsonDeserializer.addTrustedPackages("com.stockmate.order.api.order.dto");
-
         log.info("Kafka Consumer Factory 설정 완료 - Bootstrap Servers: {}", bootstrapServers);
-        return new DefaultKafkaConsumerFactory<>(props, new StringDeserializer(), new ErrorHandlingDeserializer<>(jsonDeserializer));
+        return new DefaultKafkaConsumerFactory<>(props);
     }
 
     @Bean
