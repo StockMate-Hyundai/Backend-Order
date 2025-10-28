@@ -1,6 +1,7 @@
 package com.stockmate.order.api.order.dto;
 
 import com.stockmate.order.api.order.entity.OrderStatus;
+import com.stockmate.order.api.order.entity.PaymentType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -20,6 +21,7 @@ public class OrderDetailResponseDTO {
     private Long memberId;
     private UserBatchResponseDTO userInfo;
     private List<OrderItemDetailDTO> orderItems;
+    private PaymentType paymentType;
     private String etc;
     private String rejectedMessage;
     private String carrier;
