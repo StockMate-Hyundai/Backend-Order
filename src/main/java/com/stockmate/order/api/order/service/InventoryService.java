@@ -14,6 +14,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +51,7 @@ public class InventoryService {
                             return Mono.error(ex);  // 그대로 전달
                         }
                         // 5xx 에러만 InternalServerException으로 변환
-                        log.error("부품 재고 체크 서버 에러 - Status: {}, Response: {}", 
+                        log.error("부품 재고 체크 서버 에러 - Status: {}, Response: {}",
                                 ex.getStatusCode(), ex.getResponseBodyAsString());
                         return Mono.error(new InternalServerException(ErrorStatus.NOT_CONNECTTION_PARTS_STOCK_EXCEPTION.getMessage()));
                     })
@@ -214,14 +215,30 @@ public class InventoryService {
     }
 
     // 입고 히스토리 등록 (Information 서버 API 호출)
-    public void registerReceivingHistory(Long memberId, String orderNumber, String message, String status) {
-        log.info("Information 서버 입고 히스토리 등록 API 호출 - 가맹점 ID: {}, 주문 번호: {}", memberId, orderNumber);
+    public void registerReceivingHistory(Long memberId, String orderNumber, String message, String status, List<Map<String, Object>> items) {
+        log.info("Information 서버 입고 히스토리 등록 API 호출 - 가맹점 ID: {}, 주문 번호: {}, 아이템 수: {}",
+                memberId, orderNumber, items != null ? items.size() : 0);
+
+        // 부품 간단 정보만 전달 (ID, 수량만)
+        // items에는 이미 partId, quantity가 포함되어 있음
+        List<Map<String, Object>> historyItems = new ArrayList<>();
+        for (Map<String, Object> item : items) {
+            Long partId = ((Number) item.get("partId")).longValue();
+            int quantity = ((Number) item.get("quantity")).intValue();
+
+            Map<String, Object> historyItem = new HashMap<>();
+            historyItem.put("partId", partId);
+            historyItem.put("quantity", quantity);
+            historyItems.add(historyItem);
+        }
 
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("memberId", memberId);
         requestBody.put("orderNumber", orderNumber);
         requestBody.put("message", message);
         requestBody.put("status", status);
+        requestBody.put("type", "RECEIVING"); // 타입 추가
+        requestBody.put("items", historyItems); // 부품 간단 정보만 추가
 
         try {
             String response = webClient.post()
@@ -232,9 +249,9 @@ public class InventoryService {
                     .block();
 
             log.info("Information 서버 입고 히스토리 등록 성공 - 응답: {}", response);
-            
+
         } catch (WebClientResponseException e) {
-            log.error("Information 서버 입고 히스토리 등록 실패 - Status: {}, Response: {}", 
+            log.error("Information 서버 입고 히스토리 등록 실패 - Status: {}, Response: {}",
                     e.getStatusCode(), e.getResponseBodyAsString());
             throw new InternalServerException("Information 서버 입고 히스토리 등록 실패: " + e.getMessage());
         } catch (Exception e) {
