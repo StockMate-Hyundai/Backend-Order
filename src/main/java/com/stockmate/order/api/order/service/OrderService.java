@@ -405,7 +405,7 @@ public class OrderService {
         // 주문 조회 (OrderItems와 함께)
         Order order = orderRepository.findByOrderNumberWithItems(requestDTO.getOrderNumber())
                 .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
-        
+
         // 주문의 가맹점(memberId)과 요청자의 가맹점 ID가 일치하는지 확인
         if (!order.getMemberId().equals(userId)) {
             log.error("가맹점 불일치 - Order Member ID: {}, 요청자 ID: {}", order.getMemberId(), userId);
@@ -452,24 +452,28 @@ public class OrderService {
                             return itemMap;
                         })
                         .collect(Collectors.toList());
-                
+
                 inventoryService.updateStoreInventory(order.getMemberId(), itemList);
                 log.info("Parts 서버 재고 업데이트 완료 - Order ID: {}, Attempt ID: {}", order.getOrderId(), attemptId);
-                
+
                 // 재고 업데이트 성공 시 주문 상태를 RECEIVED로 변경
                 order.completeReceiving();
                 orderRepository.save(order);
-                
+
                 // Information 서버로 입고 히스토리 등록 API 호출
                 String message = String.format("%s 주문 입고처리 되었습니다.", order.getOrderNumber());
-                
+
+                // 부품 상세 정보를 items 리스트로 변환
+                // itemList에는 이미 partId와 quantity가 포함되어 있음
                 inventoryService.registerReceivingHistory(
                         order.getMemberId(), // 가맹점 ID
                         order.getOrderNumber(), // 주문 번호
                         message, // 메시지
-                        "RECEIVED" // 상태
+                        "RECEIVED", // 상태
+                        itemList // 부품 상세 정보 (partId, quantity 포함)
                 );
-                log.info("입고 히스토리 등록 완료 - Order Number: {}, 가맹점 ID: {}", order.getOrderNumber(), order.getMemberId());
+                log.info("입고 히스토리 등록 완료 - Order Number: {}, 가맹점 ID: {}, 부품 종류: {}",
+                        order.getOrderNumber(), order.getMemberId(), itemList.size());
 
                 // WebSocket으로 상태 업데이트 전송 (요청자에게만)
                 orderWebSocketHandler.sendToUser(
@@ -480,16 +484,16 @@ public class OrderService {
                         "입고 처리가 완료되었습니다.",
                         null
                 );
-                
+
                 log.info("입고 처리 완료 - Order ID: {}, Status: RECEIVED", order.getOrderId());
-                
+
             } catch (Exception partsException) {
                 log.error("❌ Parts 서버 재고 업데이트 실패 - Order ID: {}, 에러: {}", order.getOrderId(), partsException.getMessage(), partsException);
-                
+
                 // 실패 시 롤백
                 orderTransactionService.rollbackOrderToShipping(order.getOrderId());
                 log.info("주문 상태 롤백 완료 - Order ID: {}, Status: SHIPPING", order.getOrderId());
-                
+
                 // WebSocket으로 실패 알림 (요청자에게만)
                 orderWebSocketHandler.sendToUser(
                         userId,
@@ -499,7 +503,7 @@ public class OrderService {
                         "재고 업데이트 중 오류가 발생했습니다: " + partsException.getMessage(),
                         null
                 );
-                
+
                 throw new InternalServerException("재고 업데이트 실패: " + partsException.getMessage());
             }
 
