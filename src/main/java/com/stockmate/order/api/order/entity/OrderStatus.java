@@ -1,5 +1,7 @@
 package com.stockmate.order.api.order.entity;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
@@ -21,4 +23,15 @@ public enum OrderStatus {
     CANCELLED("CANCELLED"); // 주문 취소
 
     private final String key;
+
+    @JsonValue
+    public String getKey() { return key; }
+
+    @JsonCreator(mode = JsonCreator.Mode.DELEGATING)  // ← 이 모드가 핵심
+    public static OrderStatus from(String value) {
+        for (OrderStatus o : values()) {
+            if (o.key.equalsIgnoreCase(value)) return o;
+        }
+        throw new IllegalArgumentException("Unknown OrderStatus: " + value);
+    }
 }
