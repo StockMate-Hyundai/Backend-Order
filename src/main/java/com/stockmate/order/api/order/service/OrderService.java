@@ -123,7 +123,7 @@ public class OrderService {
                 .build();
     }
 
-    @TransactionalEventListener() // 이벤트 발행을 트랜잭션 이후로
+    @Transactional
     public void cancelOrder(Long orderId, Long memberId, Role role) {
         log.info("주문 취소 요청 - Order ID: {}, Member ID: {}, Role: {}", orderId, memberId, role);
 
