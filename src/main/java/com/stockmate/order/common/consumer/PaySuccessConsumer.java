@@ -1,6 +1,6 @@
 package com.stockmate.order.common.consumer;
 
-import com.stockmate.order.api.order.dto.payResponseEvent;
+import com.stockmate.order.api.order.dto.PayResponseEvent;
 import com.stockmate.order.api.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +23,7 @@ public class PaySuccessConsumer {
             containerFactory = "kafkaListenerContainerFactory"
     )
     public void handlePaySuccess(
-            @Payload payResponseEvent event,
+            @Payload PayResponseEvent event,
             @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
             @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
             @Header(KafkaHeaders.OFFSET) long offset,
