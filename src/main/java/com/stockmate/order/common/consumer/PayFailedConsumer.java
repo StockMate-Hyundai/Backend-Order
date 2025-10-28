@@ -1,6 +1,6 @@
 package com.stockmate.order.common.consumer;
 
-import com.stockmate.order.api.order.dto.StockDeductionFailedEvent;
+import com.stockmate.order.api.order.dto.payResponseEvent;
 import com.stockmate.order.api.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,18 +23,18 @@ public class PayFailedConsumer {
             containerFactory = "kafkaListenerContainerFactory"
     )
     public void handlePayFailed(
-            @Payload StockDeductionFailedEvent event,
+            @Payload payResponseEvent event,
             @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
             @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
             @Header(KafkaHeaders.OFFSET) long offset,
             Acknowledgment acknowledgment
     ) {
-        log.info("결제 실패 이벤트 수신 - 토픽: {}, 파티션: {}, 오프셋: {}, Order ID: {}, Order Number: {}, Reason: {}",
-                topic, partition, offset, event.getOrderId(), event.getOrderNumber(), event.getReason());
+        log.info("결제 실패 이벤트 수신 - 토픽: {}, 파티션: {}, 오프셋: {}, Order ID: {}",
+                topic, partition, offset, event.getOrderId());
 
         orderService.changeOrderStatus(event.getOrderId(), "FAILED");
         acknowledgment.acknowledge();
 
-        log.info("결제 성공 이벤트 처리 완료 (주문 상태를 FAILED로 변경) - Order ID: {}", event.getOrderId());
+        log.info("결제 실패 이벤트 처리 완료 (주문 상태를 FAILED로 변경) - Order ID: {}", event.getOrderId());
     }
 }

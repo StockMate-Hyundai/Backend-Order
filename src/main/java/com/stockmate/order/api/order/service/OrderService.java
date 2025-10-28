@@ -791,36 +791,48 @@ public class OrderService {
             Order orderWithItems = orderRepository.findByIdWithItems(orderId)
                     .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
 
-            // 재고 차감 요청 이벤트 생성
-            List<StockDeductionRequestEvent.StockDeductionItem> items = orderWithItems.getOrderItems().stream()
-                    .map(item -> StockDeductionRequestEvent.StockDeductionItem.builder()
-                            .partId(item.getPartId())
-                            .amount(item.getAmount())
-                            .build())
+            // 재고 차감 요청 데이터 생성
+            List<Map<String, Object>> items = orderWithItems.getOrderItems().stream()
+                    .map(item -> {
+                        Map<String, Object> itemMap = new HashMap<>();
+                        itemMap.put("partId", item.getPartId());
+                        itemMap.put("amount", item.getAmount());
+                        return itemMap;
+                    })
                     .collect(Collectors.toList());
 
-            StockDeductionRequestEvent event = StockDeductionRequestEvent.builder()
-                    .orderId(orderId)
-                    .approvalAttemptId(approvalAttemptId)
-                    .items(items)
-                    .build();
-
-            // Kafka 이벤트 발행
+            // Parts 서버 재고 차감 API 직접 호출
             try {
-                kafkaProducerService.sendStockDeductionRequest(event);
-                log.info("재고 차감 요청 이벤트 발행 완료 - Order ID: {}, Attempt ID: {}", orderId, approvalAttemptId);
-            } catch (Exception e) {
-                log.error("Kafka 이벤트 발행 실패 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
+                inventoryService.deductStock(orderId, orderWithItems.getOrderNumber(), items);
+                log.info("재고 차감 API 호출 성공 - Order ID: {}", orderId);
 
-                // Kafka 발행 실패 시 롤백
+                // 주문 승인 완료 처리
+                orderTransactionService.approveOrder(orderId);
+                log.info("주문 승인 완료 - Order ID: {}", orderId);
+
+                // WebSocket으로 성공 알림 (요청자에게만)
+                orderWebSocketHandler.sendToUser(
+                        userId,
+                        orderId,
+                        OrderStatus.PENDING_SHIPPING,
+                        "APPROVAL_SUCCESS",
+                        "주문이 승인되었습니다.",
+                        null
+                );
+
+            } catch (Exception e) {
+                log.error("재고 차감 API 호출 실패 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
+
+                // API 호출 실패 시 롤백
                 orderTransactionService.rollbackOrderToCompleted(orderId);
 
-                // WebSocket으로 실패 알림
-                orderWebSocketHandler.sendOrderStatusUpdate(
+                // WebSocket으로 실패 알림 (요청자에게만)
+                orderWebSocketHandler.sendToUser(
+                        userId,
                         orderId,
                         OrderStatus.ORDER_COMPLETED,
                         "ERROR",
-                        "주문 승인 처리 중 오류가 발생했습니다.",
+                        "재고 차감 실패: " + e.getMessage(),
                         null
                 );
             }
@@ -836,89 +848,6 @@ public class OrderService {
                     "주문 승인 처리 중 오류가 발생했습니다: " + e.getMessage(),
                     null
             );
-        }
-    }
-
-    // WebSocket 기반 재고 차감 성공 처리
-    @Transactional
-    public void handleStockDeductionSuccessWebSocket(StockDeductionSuccessEvent event) {
-        log.info("=== WebSocket 재고 차감 성공 처리 시작 === Order ID: {}, Attempt ID: {}",
-                event.getOrderId(), event.getApprovalAttemptId());
-
-        try {
-            Order order = orderRepository.findById(event.getOrderId())
-                    .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
-
-            // 상태 및 Attempt ID 검증
-            if (order.getOrderStatus() != OrderStatus.PENDING_APPROVAL) {
-                log.warn("주문 상태가 PENDING_APPROVAL이 아님 - Order ID: {}, Current Status: {}", event.getOrderId(), order.getOrderStatus());
-                return;
-            }
-
-            if (!event.getApprovalAttemptId().equals(order.getApprovalAttemptId())) {
-                log.warn("승인 시도 ID가 일치하지 않음 - Order ID: {}, Event Attempt ID: {}, Order Attempt ID: {}", event.getOrderId(), event.getApprovalAttemptId(), order.getApprovalAttemptId());
-                return;
-            }
-
-            // 주문 승인 처리
-            order.approve();
-            orderRepository.save(order);
-
-            log.info("=== WebSocket 주문 승인 완료 === Order ID: {}, Status: {}",
-                    event.getOrderId(), order.getOrderStatus());
-
-            // WebSocket으로 성공 알림
-            orderWebSocketHandler.sendOrderStatusUpdate(
-                    event.getOrderId(),
-                    OrderStatus.PENDING_SHIPPING,
-                    "COMPLETED",
-                    "주문 승인이 완료되었습니다.",
-                    null
-            );
-
-        } catch (Exception e) {
-            log.error("WebSocket 재고 차감 성공 처리 중 오류 발생 - Order ID: {}, 에러: {}", event.getOrderId(), e.getMessage(), e);
-        }
-    }
-
-    // WebSocket 기반 재고 차감 실패 처리
-    @Transactional
-    public void handleStockDeductionFailedWebSocket(StockDeductionFailedEvent event) {
-        log.info("=== WebSocket 재고 차감 실패 처리 시작 === Order ID: {}, Attempt ID: {}",
-                event.getOrderId(), event.getApprovalAttemptId());
-
-        try {
-            Order order = orderRepository.findById(event.getOrderId()).orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
-
-            // 상태 및 Attempt ID 검증
-            if (order.getOrderStatus() != OrderStatus.PENDING_APPROVAL) {
-                log.warn("주문 상태가 PENDING_APPROVAL이 아님 - Order ID: {}, Current Status: {}", event.getOrderId(), order.getOrderStatus());
-                return;
-            }
-
-            if (!event.getApprovalAttemptId().equals(order.getApprovalAttemptId())) {
-                log.warn("승인 시도 ID가 일치하지 않음 - Order ID: {}, Event Attempt ID: {}, Order Attempt ID: {}", event.getOrderId(), event.getApprovalAttemptId(), order.getApprovalAttemptId());
-                return;
-            }
-
-            // 주문을 ORDER_COMPLETED로 롤백
-            order.rollbackToOrderCompleted();
-            orderRepository.save(order);
-
-            log.info("=== WebSocket 주문 승인 실패 처리 완료 === Order ID: {}, Status: {}", event.getOrderId(), order.getOrderStatus());
-
-            // WebSocket으로 실패 알림
-            orderWebSocketHandler.sendOrderStatusUpdate(
-                    event.getOrderId(),
-                    OrderStatus.ORDER_COMPLETED,
-                    "FAILED",
-                    "재고 부족으로 주문 승인이 실패했습니다.",
-                    event.getData()
-            );
-
-        } catch (Exception e) {
-            log.error("WebSocket 재고 차감 실패 처리 중 오류 발생 - Order ID: {}, 에러: {}",
-                    event.getOrderId(), e.getMessage(), e);
         }
     }
 

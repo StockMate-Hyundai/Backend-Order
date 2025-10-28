@@ -1,6 +1,6 @@
 package com.stockmate.order.common.consumer;
 
-import com.stockmate.order.api.order.dto.StockDeductionFailedEvent;
+import com.stockmate.order.api.order.dto.payResponseEvent;
 import com.stockmate.order.api.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,14 +23,14 @@ public class PaySuccessConsumer {
             containerFactory = "kafkaListenerContainerFactory"
     )
     public void handlePaySuccess(
-            @Payload StockDeductionFailedEvent event,
+            @Payload payResponseEvent event,
             @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
             @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
             @Header(KafkaHeaders.OFFSET) long offset,
             Acknowledgment acknowledgment
     ) {
-        log.info("결제 성공 이벤트 수신 - 토픽: {}, 파티션: {}, 오프셋: {}, Order ID: {}, Order Number: {}, Reason: {}",
-                topic, partition, offset, event.getOrderId(), event.getOrderNumber(), event.getReason());
+        log.info("결제 성공 이벤트 수신 - 토픽: {}, 파티션: {}, 오프셋: {}, Order ID: {}",
+                topic, partition, offset, event.getOrderId());
 
         orderService.changeOrderStatus(event.getOrderId(), "PENDING_SHIPPING"); // 출고 대기로 변경
         acknowledgment.acknowledge();
