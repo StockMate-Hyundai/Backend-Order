@@ -18,7 +18,6 @@ import java.util.List;
 public class OrderResponseDto extends BaseTimeEntity {
     private Long orderId;
     private String orderNumber;
-    private List<OrderItem> orderItems;
     private int totalPrice;
     private PaymentType paymentType;
     private Boolean isSuccess;
@@ -28,7 +27,6 @@ public class OrderResponseDto extends BaseTimeEntity {
         return OrderResponseDto.builder()
                 .orderId(o.getOrderId())
                 .orderNumber(o.getOrderNumber())
-                .orderItems(o.getOrderItems())
                 .totalPrice(o.getTotalPrice())
                 .paymentType(o.getPaymentType())
                 .isSuccess(isSuccess)
