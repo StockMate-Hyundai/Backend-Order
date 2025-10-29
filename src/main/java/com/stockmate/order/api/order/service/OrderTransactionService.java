@@ -31,8 +31,8 @@ public class OrderTransactionService {
                     return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
                 });
 
-        // 주문 상태 확인 (ORDER_COMPLETED만 승인 가능)
-        if (order.getOrderStatus() != OrderStatus.ORDER_COMPLETED) {
+        // 주문 상태 확인 (PAY_COMPLETED만 승인 가능)
+        if (order.getOrderStatus() != OrderStatus.PAY_COMPLETED) {
             log.warn("승인 불가능한 상태 - Order ID: {}, Status: {}", orderId, order.getOrderStatus());
             throw new BadRequestException(ErrorStatus.INVALID_ORDER_STATUS_FOR_APPROVAL.getMessage());
         }
@@ -52,7 +52,7 @@ public class OrderTransactionService {
     public void approveOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
-        
+
         if (order.getOrderStatus() != OrderStatus.PENDING_APPROVAL) {
             log.warn("승인 불가능한 상태 - Order ID: {}, Status: {}", orderId, order.getOrderStatus());
             throw new BadRequestException(ErrorStatus.INVALID_ORDER_STATUS_FOR_APPROVAL.getMessage());
@@ -64,7 +64,7 @@ public class OrderTransactionService {
     }
 
     /**
-     * 재고 차감 실패 시 주문 상태를 ORDER_COMPLETED로 복원 (별도 트랜잭션 - REQUIRES_NEW)
+     * 재고 차감 실패 시 주문 상태를 PAY_COMPLETED로 복원 (별도 트랜잭션 - REQUIRES_NEW)
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void rollbackOrderToCompleted(Long orderId) {
@@ -72,9 +72,9 @@ public class OrderTransactionService {
                 .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
         
         if (order.getOrderStatus() == OrderStatus.PENDING_APPROVAL) {
-            order.rollbackToOrderCompleted();
+            order.rollbackToPayCompleted();
             orderRepository.save(order);
-            log.info("재고 차감 실패로 주문 상태 복원 - Order ID: {}, Status: ORDER_COMPLETED", orderId);
+            log.info("재고 차감 실패로 주문 상태 복원 - Order ID: {}, Status: PAY_COMPLETED", orderId);
         }
     }
 
