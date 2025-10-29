@@ -21,7 +21,7 @@ public class OrderApprovalCleanupScheduler {
     private static final int APPROVAL_EXPIRY_MINUTES = 30; // 30분 이상 PENDING_APPROVAL인 경우 만료
 
     /**
-     * 매 5분마다 만료된 PENDING_APPROVAL 주문을 ORDER_COMPLETED로 되돌림
+     * 매 5분마다 만료된 PENDING_APPROVAL 주문을 PAY_COMPLETED로 되돌림
      * (Kafka 이벤트가 영원히 안 오는 경우 방지)
      */
     @Scheduled(fixedDelay = 300000) // 5분마다 실행 (300,000ms)
@@ -46,11 +46,11 @@ public class OrderApprovalCleanupScheduler {
             log.warn("만료된 주문 복원 시작 - Order ID: {}, Order Number: {}, 승인 시작 시간: {}", 
                     order.getOrderId(), order.getOrderNumber(), order.getApprovalStartedAt());
 
-            // 주문 상태를 ORDER_COMPLETED로 되돌림
-            order.rollbackToOrderCompleted();
+            // 주문 상태를 PAY_COMPLETED로 되돌림
+            order.rollbackToPayCompleted();
             orderRepository.save(order);
 
-            log.warn("만료된 주문 복원 완료 - Order ID: {}, Status: ORDER_COMPLETED", order.getOrderId());
+            log.warn("만료된 주문 복원 완료 - Order ID: {}, Status: PAY_COMPLETED", order.getOrderId());
             
             // TODO: 관리자 알림 또는 모니터링 지표 전송
         }

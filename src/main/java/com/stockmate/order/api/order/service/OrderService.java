@@ -26,8 +26,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.time.Duration;
 import java.util.*;
@@ -751,7 +749,8 @@ public class OrderService {
                     return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
                 });
 
-        if (order.getOrderStatus() != OrderStatus.ORDER_COMPLETED) {
+        // TODO: 상태 변경 적용하기
+        if (order.getOrderStatus() != OrderStatus.PAY_COMPLETED) {
             log.warn("승인 불가능한 상태 - Order ID: {}, Status: {}", orderRejectRequestDTO.getOrderId(), order.getOrderStatus());
             throw new BadRequestException(ErrorStatus.INVALID_ORDER_STATUS_FOR_APPROVAL.getMessage());
         }
@@ -806,7 +805,7 @@ public class OrderService {
             Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
 
-            if (order.getOrderStatus() != OrderStatus.ORDER_COMPLETED) {
+            if (order.getOrderStatus() != OrderStatus.PAY_COMPLETED) {
                 throw new BadRequestException(ErrorStatus.INVALID_ORDER_STATUS_FOR_APPROVAL.getMessage());
             }
 
@@ -870,7 +869,7 @@ public class OrderService {
                 orderWebSocketHandler.sendToUser(
                         userId,
                         orderId,
-                        OrderStatus.ORDER_COMPLETED,
+                        OrderStatus.PAY_COMPLETED,
                         "ERROR",
                         "재고 차감 실패: " + e.getMessage(),
                         null
