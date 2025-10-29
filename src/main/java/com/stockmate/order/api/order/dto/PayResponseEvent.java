@@ -13,7 +13,7 @@ public class PayResponseEvent {
     private Long orderId;
     private String orderNumber;
     private String approvalAttemptId; // Saga 시도 식별자
-    private Boolean IsSuccess;
+    private Boolean isSuccess;
     private String etc;
 
     public static PayResponseEvent of(PayRequestEvent event, Boolean isSuccess, String etc) {
@@ -21,7 +21,7 @@ public class PayResponseEvent {
                 .orderId(event.getOrderId())
                 .orderNumber(event.getOrderNumber())
                 .approvalAttemptId("PAY-" + System.currentTimeMillis())
-                .IsSuccess(isSuccess)
+                .isSuccess(isSuccess)
                 .etc(etc)
                 .build();
     }
