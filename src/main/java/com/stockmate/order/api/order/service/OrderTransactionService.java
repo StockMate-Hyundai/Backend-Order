@@ -53,7 +53,7 @@ public class OrderTransactionService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage()));
 
-        if (order.getOrderStatus() != OrderStatus.PAY_COMPLETED) {
+        if (order.getOrderStatus() != OrderStatus.PENDING_APPROVAL) {
             log.warn("승인 불가능한 상태 - Order ID: {}, Status: {}", orderId, order.getOrderStatus());
             throw new BadRequestException(ErrorStatus.INVALID_ORDER_STATUS_FOR_APPROVAL.getMessage());
         }
@@ -64,8 +64,7 @@ public class OrderTransactionService {
     }
 
     /**
-     * 재고 차감 실패 시 주문 상태를 ORDER_COMPLETED로 복원 (별도 트랜잭션 - REQUIRES_NEW)
-     * Kafka 발행 실패 시 주문 상태를 PAY_COMPLETED로 복원 (별도 트랜잭션 - REQUIRES_NEW)
+     * 재고 차감 실패 시 주문 상태를 PAY_COMPLETED로 복원 (별도 트랜잭션 - REQUIRES_NEW)
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void rollbackOrderToCompleted(Long orderId) {
@@ -75,7 +74,7 @@ public class OrderTransactionService {
         if (order.getOrderStatus() == OrderStatus.PENDING_APPROVAL) {
             order.rollbackToPayCompleted();
             orderRepository.save(order);
-            log.info("재고 차감 실패로 주문 상태 복원 - Order ID: {}, Status: ORDER_COMPLETED", orderId);
+            log.info("재고 차감 실패로 주문 상태 복원 - Order ID: {}, Status: PAY_COMPLETED", orderId);
         }
     }
 
