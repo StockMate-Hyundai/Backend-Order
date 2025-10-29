@@ -89,8 +89,8 @@ public class Order extends BaseTimeEntity {
     }
 
     // 주문 승인 실패 시 다시 주문 완료 상태로 되돌림
-    public void rollbackToOrderCompleted() {
-        this.orderStatus = OrderStatus.ORDER_COMPLETED;
+    public void rollbackToPayCompleted() {
+        this.orderStatus = OrderStatus.PAY_COMPLETED;
     }
 
     // 배송 등록
