@@ -27,6 +27,7 @@ public enum SuccessStatus {
     REGISTER_SHIPPING_SUCCESS(HttpStatus.OK,"배송 등록 성공"),
     REQUEST_RECEIVING_PROCESS_SUCCESS(HttpStatus.OK,"입고 처리 요청 성공"),
     CHECK_ORDER_DATA_SUCCESS(HttpStatus.OK, "주문 검증 조회 성공"),
+    GET_TODAY_DASHBOARD_SUCCESS(HttpStatus.OK, "금일 대시보드 조회 성공"),
 
     /**
      * 201
