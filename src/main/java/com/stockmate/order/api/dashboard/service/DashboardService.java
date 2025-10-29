@@ -1,5 +1,6 @@
 package com.stockmate.order.api.dashboard.service;
 
+import com.stockmate.order.api.dashboard.dto.HourlyInOutResponseDTO;
 import com.stockmate.order.api.dashboard.dto.TodayDashboardResponseDTO;
 import com.stockmate.order.api.order.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -76,6 +77,34 @@ public class DashboardService {
         return TodayDashboardResponseDTO.builder()
                 .summary(summary)
                 .hourlyStats(hourlyStats)
+                .build();
+    }
+
+    // 금일 시간대별 입출고 추이
+    @Transactional(readOnly = true)
+    public HourlyInOutResponseDTO getTodayInboundOutbound() {
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime endOfDay = LocalDate.now().atTime(23, 59, 59);
+
+        // 주문 생성(입고) 시간대별
+        List<Object[]> ordersByHour = orderRepository.countOrdersByHour(startOfDay, endOfDay);
+        Map<Integer, Long> orderCountMap = convertToMap(ordersByHour);
+
+        // 배송 처리(출고) 시간대별
+        List<Object[]> shippingProcessedByHour = orderRepository.countShippingProcessedByHour(startOfDay, endOfDay);
+        Map<Integer, Long> shippingProcessedMap = convertToMap(shippingProcessedByHour);
+
+        List<com.stockmate.order.api.dashboard.dto.HourlyInOutResponseDTO.HourStat> list = new ArrayList<>();
+        for (int hour = 0; hour < 24; hour++) {
+            list.add(com.stockmate.order.api.dashboard.dto.HourlyInOutResponseDTO.HourStat.builder()
+                    .hour(hour)
+                    .inboundOrders(orderCountMap.getOrDefault(hour, 0L))
+                    .outboundShipped(shippingProcessedMap.getOrDefault(hour, 0L))
+                    .build());
+        }
+
+        return HourlyInOutResponseDTO.builder()
+                .hours(list)
                 .build();
     }
 
