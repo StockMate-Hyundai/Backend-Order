@@ -44,10 +44,6 @@ public class OrderService {
     private final OrderWebSocketHandler orderWebSocketHandler;
     private final WebClient webClient;
 
-    @Value("${order.server.url}")
-    private String orderServerUrl;
-
-
     @Transactional
     public OrderResponseDto makeOrder(OrderRequestDTO orderRequestDTO, Long memberId) {
         log.info("부품 발주 시작 - Member ID: {}, 주문 항목 수: {}",
