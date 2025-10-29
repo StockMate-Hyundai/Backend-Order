@@ -1,5 +1,6 @@
 package com.stockmate.order.api.order.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -17,6 +18,7 @@ public class OrderItem {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
+    @JsonIgnore // 순환 참조 해결
     private Order order;
 
     @Column(name = "part_id", nullable = false)
