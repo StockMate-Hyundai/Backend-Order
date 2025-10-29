@@ -1,5 +1,6 @@
 package com.stockmate.order.api.dashboard.controller;
 
+import com.stockmate.order.api.dashboard.dto.HourlyInOutResponseDTO;
 import com.stockmate.order.api.dashboard.dto.TodayDashboardResponseDTO;
 import com.stockmate.order.api.dashboard.service.DashboardService;
 import com.stockmate.order.common.response.ApiResponse;
@@ -21,24 +22,36 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Dashboard", description = "대시보드 관련 API 입니다.")
 public class DashboardController {
 
-    private final DashboardService dashboardService;
+	private final DashboardService dashboardService;
 
-    @Operation(
-            summary = "금일 대시보드 조회",
-            description = "금일 주문 수, 배송 처리 수, 배송 중인 수, 매출 금액 및 시간대별 추이를 조회합니다."
-    )
-    @GetMapping("/today")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<TodayDashboardResponseDTO>> getTodayDashboard() {
-        log.info("금일 대시보드 조회 요청");
+	@Operation(
+			summary = "금일 대시보드 조회",
+			description = "금일 주문 수, 배송 처리 수, 배송 중인 수, 매출 금액 및 시간대별 추이를 조회합니다."
+	)
+	@GetMapping("/today")
+	@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+	public ResponseEntity<ApiResponse<TodayDashboardResponseDTO>> getTodayDashboard() {
+		log.info("금일 대시보드 조회 요청");
 
-        TodayDashboardResponseDTO response = dashboardService.getTodayDashboard();
+		TodayDashboardResponseDTO response = dashboardService.getTodayDashboard();
 
-        log.info("금일 대시보드 조회 완료 - 총 주문: {}, 매출: {}", 
-                response.getSummary().getTotalOrders(), 
-                response.getSummary().getTotalRevenue());
+		log.info("금일 대시보드 조회 완료 - 총 주문: {}, 매출: {}",
+				response.getSummary().getTotalOrders(),
+				response.getSummary().getTotalRevenue());
 
-        return ApiResponse.success(SuccessStatus.GET_TODAY_DASHBOARD_SUCCESS, response);
-    }
+		return ApiResponse.success(SuccessStatus.GET_TODAY_DASHBOARD_SUCCESS, response);
+	}
+
+	@Operation(
+			summary = "금일 시간대별 입출고 추이",
+			description = "금일 0~23시 시간대별로 입고(주문) 수, 출고(배송 처리) 수를 조회합니다."
+	)
+	@GetMapping("/today/inout")
+	@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+	public ResponseEntity<ApiResponse<HourlyInOutResponseDTO>> getTodayInboundOutbound() {
+
+        var response = dashboardService.getTodayInboundOutbound();
+		return ApiResponse.success(SuccessStatus.GET_TODAY_INOUT_DASHBOARD_SUCCESS, response);
+	}
 }
 
