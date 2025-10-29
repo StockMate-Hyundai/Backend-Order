@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/dashboard")
+@RequestMapping("/api/v1/order/dashboard")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Dashboard", description = "대시보드 관련 API 입니다.")
