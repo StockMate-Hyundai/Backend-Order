@@ -19,7 +19,7 @@ import static jakarta.transaction.Transactional.TxType.REQUIRES_NEW;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class handlePayRequest {
+public class HandlePayRequest {
 
     private final PaymentService paymentService;
     private final OrderRepository orderRepository;

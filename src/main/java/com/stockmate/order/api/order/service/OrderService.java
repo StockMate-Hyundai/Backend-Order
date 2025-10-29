@@ -40,11 +40,9 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final InventoryService inventoryService;
     private final UserService userService;
-    private final PaymentService paymentService;
     private final KafkaProducerService kafkaProducerService;
     private final OrderTransactionService orderTransactionService;
     private final OrderWebSocketHandler orderWebSocketHandler;
-    private final WebClient webClient;
     private final ApplicationEventPublisher applicationEventPublisher;
 
     @Transactional
