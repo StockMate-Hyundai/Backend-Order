@@ -19,6 +19,7 @@ import com.stockmate.order.common.response.ErrorStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,10 +43,10 @@ public class OrderService {
     private final KafkaProducerService kafkaProducerService;
     private final OrderTransactionService orderTransactionService;
     private final OrderWebSocketHandler orderWebSocketHandler;
-    private final WebClient webClient;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Transactional
-    public OrderResponseDto makeOrder(OrderRequestDTO orderRequestDTO, Long memberId) {
+    public MakeOrderResponseDto makeOrder(OrderRequestDTO orderRequestDTO, Long memberId) {
         log.info("부품 발주 시작 - Member ID: {}, 주문 항목 수: {}",
                 memberId, orderRequestDTO.getOrderItems().size());
 
@@ -96,65 +97,14 @@ public class OrderService {
 
         PayRequestEvent payRequestEvent = PayRequestEvent.of(savedOrder, memberId);
 
-        // 결제 요청
-        PayResponseEvent payResponse;
-
-        try {
-            payResponse = webClient.post()
-                    .uri("/api/v1/payment/pay")
-                    .bodyValue(payRequestEvent)
-                    .retrieve()
-                    .bodyToMono(PayResponseEvent.class)
-                    .timeout(Duration.ofSeconds(5))
-                    .block();
-            log.info("✅ 결제 API 호출 성공 - response: {}", payResponse);
-        } catch (Exception e) {
-            log.error("❌ 결제 API 호출 실패 - orderId: {}, error: {}", savedOrder.getOrderId(), e.getMessage());
-            savedOrder.setOrderStatus(OrderStatus.FAILED);
-            orderRepository.save(savedOrder);
-
-            return OrderResponseDto.of(savedOrder, false, "Payment 서버 호출 실패");
-        }
-
-        if (payResponse == null) {
-            savedOrder.setOrderStatus(OrderStatus.FAILED);
-            orderRepository.save(savedOrder);
-
-            return OrderResponseDto.of(savedOrder, false, "결제 응답이 잘못되었습니다.");
-        }
-
-
-        if (Boolean.TRUE.equals(payResponse.getIsSuccess())) {
-            savedOrder.setOrderStatus(OrderStatus.PAY_COMPLETED);
-            log.info("✅ 결제 성공 - Order ID: {}, Number: {}", savedOrder.getOrderId(), savedOrder.getOrderNumber());
-        } else {
-            savedOrder.setOrderStatus(OrderStatus.FAILED);
-            log.warn("❌ 결제 실패 - Order ID: {}, reason: {}", savedOrder.getOrderId(), payResponse.getEtc());
-        }
-
-        orderRepository.save(savedOrder);
-
-//        try {
-//            kafkaProducerService.sendPayRequest(payRequestEvent);
-//            log.info("결제 요청 이벤트 발송 완료 - Order ID: {}, 금액: {}",
-//                    finalOrder.getOrderId(), finalOrder.getTotalPrice());
-//        } catch (Exception e) {
-//            log.error("결제 요청 이벤트 발송 실패 - Order ID: {}", finalOrder.getOrderId(), e);
-//            Order failedOrder = finalOrder.toBuilder().orderStatus(OrderStatus.FAILED).build();
-//            orderRepository.save(failedOrder);
-//            throw new BadRequestException("결제 요청 처리 중 오류가 발생했습니다.");
-//        }
+        applicationEventPublisher.publishEvent(payRequestEvent);
 
         log.info("주문 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}",
                 savedOrder.getOrderId(), savedOrder.getOrderNumber(), savedOrder.getMemberId(),
                 savedOrder.getOrderItems().size(), checkResult.getTotalPrice(),
                 savedOrder.getOrderStatus()
         );
-        return OrderResponseDto.of(
-                savedOrder,
-                Boolean.TRUE.equals(payResponse.getIsSuccess()),
-                payResponse.getEtc()
-        );
+        return MakeOrderResponseDto.of(savedOrder);
     }
 
     @Transactional
