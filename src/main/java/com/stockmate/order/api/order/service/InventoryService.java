@@ -215,9 +215,9 @@ public class InventoryService {
     }
 
     // 입고 히스토리 등록 (Information 서버 API 호출)
-    public void registerReceivingHistory(Long memberId, String orderNumber, String message, String status, List<Map<String, Object>> items) {
-        log.info("Information 서버 입고 히스토리 등록 API 호출 - 가맹점 ID: {}, 주문 번호: {}, 아이템 수: {}",
-                memberId, orderNumber, items != null ? items.size() : 0);
+    public void registerReceivingHistory(Long memberId, Long orderId, String orderNumber, String message, String status, List<Map<String, Object>> items) {
+        log.info("Information 서버 입고 히스토리 등록 API 호출 - 가맹점 ID: {}, 주문 ID: {}, 주문 번호: {}, 아이템 수: {}",
+                memberId, orderId, orderNumber, items != null ? items.size() : 0);
 
         // 부품 간단 정보만 전달 (ID, 수량만)
         // items에는 이미 partId, quantity가 포함되어 있음
@@ -234,6 +234,7 @@ public class InventoryService {
 
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("memberId", memberId);
+        requestBody.put("orderId", orderId);
         requestBody.put("orderNumber", orderNumber);
         requestBody.put("message", message);
         requestBody.put("status", status);
