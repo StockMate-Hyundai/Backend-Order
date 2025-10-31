@@ -31,6 +31,18 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
             LocalDate startDate,
             LocalDate endDate,
             Pageable pageable) {
+        return findOrdersWithFilters(status, partId, memberId, startDate, endDate, pageable, false);
+    }
+
+    @Override
+    public Page<Order> findOrdersWithFilters(
+            OrderStatus status,
+            Long partId,
+            Long memberId,
+            LocalDate startDate,
+            LocalDate endDate,
+            Pageable pageable,
+            boolean excludeFailed) {
 
         QOrder order = QOrder.order;
         QOrderItem orderItem = QOrderItem.orderItem;
@@ -44,7 +56,8 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
                         statusEq(status),
                         memberIdEq(memberId),
                         partIdEq(partId, orderItem),
-                        createdAtBetween(startDate, endDate)
+                        createdAtBetween(startDate, endDate),
+                        excludeFailedStatus(excludeFailed)
                 )
                 .fetchOne();
 
@@ -61,7 +74,8 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
                         statusEq(status),
                         memberIdEq(memberId),
                         partIdEq(partId, orderItem),
-                        createdAtBetween(startDate, endDate)
+                        createdAtBetween(startDate, endDate),
+                        excludeFailedStatus(excludeFailed)
                 )
                 .orderBy(order.createdAt.desc())
                 .offset(pageable.getOffset())
@@ -113,5 +127,10 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
             return QOrder.order.createdAt.loe(endDateTime);
         }
         return null;
+    }
+
+    // FAILED 상태 제외 필터
+    private BooleanExpression excludeFailedStatus(boolean excludeFailed) {
+        return excludeFailed ? QOrder.order.orderStatus.ne(OrderStatus.FAILED) : null;
     }
 }

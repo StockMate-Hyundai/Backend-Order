@@ -13,6 +13,7 @@ public enum OrderStatus {
     PAY_COMPLETED("PAY_COMPLETED"),
     PENDING_APPROVAL("PENDING_APPROVAL"), // 승인 대기 (재고 차감 및 결제 진행 중)
     FAILED("FAILED"), // 결제 실패
+    APPROVAL_ORDER("APPROVAL_ORDER"), // 승인 완료
     PENDING_SHIPPING("PENDING_SHIPPING"), // 출고 대기
     SHIPPING("SHIPPING"), // 배송중
     PENDING_RECEIVING("PENDING_RECEIVING"), // 입고 대기
