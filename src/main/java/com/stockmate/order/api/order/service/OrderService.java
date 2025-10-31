@@ -345,10 +345,10 @@ public class OrderService {
         log.info("배송 등록 요청 - Order Number: {}, 요청자 Role: {}", requestDTO.getOrderNumber(), role);
 
         // 권한 확인: WAREHOUSE만 배송 등록 가능
-        if (role != Role.WAREHOUSE) {
-            log.error("권한 부족 - Role: {}", role);
-            throw new UnauthorizedException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
-        }
+//        if (role != Role.WAREHOUSE) {
+//            log.error("권한 부족 - Role: {}", role);
+//            throw new UnauthorizedException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
+//        }
 
         // 주문 조회
         Order order = orderRepository.findByOrderNumber(requestDTO.getOrderNumber())
@@ -397,10 +397,10 @@ public class OrderService {
         log.info("주문 상태를 출고 대기로 변경 요청 - Order ID: {}, 요청자 Role: {}", orderId, role);
 
         // 권한 확인: WAREHOUSE만 가능
-        if (role != Role.WAREHOUSE) {
-            log.error("권한 부족 - Role: {}", role);
-            throw new UnauthorizedException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
-        }
+//        if (role != Role.WAREHOUSE) {
+//            log.error("권한 부족 - Role: {}", role);
+//            throw new UnauthorizedException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
+//        }
 
         // 주문 조회
         Order order = orderRepository.findById(orderId)
