@@ -77,9 +77,12 @@ public class Order extends BaseTimeEntity {
         this.approvalStartedAt = LocalDateTime.now();
     }
 
-    // 주문 승인 완료 (출고 대기 상태로 변경)
+    // 출고 대기로 변경
+    public void pendingShipping() {this.orderStatus = OrderStatus.PENDING_SHIPPING;}
+
+    // 주문 승인으로 변경
     public void approve() {
-        this.orderStatus = OrderStatus.PENDING_SHIPPING;
+        this.orderStatus = OrderStatus.APPROVAL_ORDER;
     }
 
     // 주문 반려

@@ -389,6 +389,39 @@ public class OrderService {
         return trackingNumber.toString();
     }
 
+    /**
+     * 주문 상태를 PENDING_SHIPPING으로 변경 (창고 관리자 전용)
+     */
+    @Transactional
+    public void updateOrderStatusToPendingShipping(Long orderId, Role role) {
+        log.info("주문 상태를 출고 대기로 변경 요청 - Order ID: {}, 요청자 Role: {}", orderId, role);
+
+        // 권한 확인: WAREHOUSE만 가능
+        if (role != Role.WAREHOUSE) {
+            log.error("권한 부족 - Role: {}", role);
+            throw new UnauthorizedException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
+        }
+
+        // 주문 조회
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> {
+                    log.error("주문을 찾을 수 없음 - Order ID: {}", orderId);
+                    return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
+                });
+
+        // 주문 상태 확인 (승인 완료 상태만 출고 대기로 변경 가능)
+        if (order.getOrderStatus() != OrderStatus.APPROVAL_ORDER) {
+            log.warn("출고 대기로 변경 불가능한 상태 - Order ID: {}, Status: {}", orderId, order.getOrderStatus());
+            throw new BadRequestException(ErrorStatus.INVALID_ORDER_STATUS_FOR_SHIPPING.getMessage());
+        }
+
+        // 주문 상태를 PENDING_SHIPPING으로 변경
+        order.pendingShipping();
+        orderRepository.save(order);
+
+        log.info("주문 상태를 출고 대기로 변경 완료 - Order ID: {}, Status: PENDING_SHIPPING", orderId);
+    }
+
     // 입고 처리 요청 (WebSocket 기반)
     @Transactional
     public void requestReceivingProcess(ReceivingProcessRequestDTO requestDTO, Role role, Long userId) {
@@ -649,7 +682,8 @@ public class OrderService {
                 memberId,
                 requestDTO.getStartDate(),
                 requestDTO.getEndDate(),
-                pageable
+                pageable,
+                true  // FAILED 상태 제외
         );
 
         if (orderPage.isEmpty()) {
@@ -814,7 +848,7 @@ public class OrderService {
                 orderWebSocketHandler.sendToUser(
                         userId,
                         orderId,
-                        OrderStatus.PENDING_SHIPPING,
+                        OrderStatus.APPROVAL_ORDER,
                         "APPROVAL_SUCCESS",
                         "주문이 승인되었습니다.",
                         null

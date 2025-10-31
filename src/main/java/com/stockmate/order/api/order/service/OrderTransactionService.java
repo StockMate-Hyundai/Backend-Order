@@ -60,7 +60,7 @@ public class OrderTransactionService {
 
         order.approve();
         orderRepository.save(order);
-        log.info("주문 승인 완료 - Order ID: {}, Status: PENDING_SHIPPING", orderId);
+        log.info("주문 승인 완료 - Order ID: {}, Status: APPROVAL_ORDER", orderId);
     }
 
     /**

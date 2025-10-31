@@ -16,4 +16,14 @@ public interface OrderRepositoryCustom {
             LocalDate endDate,
             Pageable pageable
     );
+    
+    Page<Order> findOrdersWithFilters(
+            OrderStatus status,
+            Long partId,
+            Long memberId,
+            LocalDate startDate,
+            LocalDate endDate,
+            Pageable pageable,
+            boolean excludeFailed
+    );
 }
