@@ -30,6 +30,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.Duration;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -82,12 +83,25 @@ public class OrderService {
                 .orderItems(new ArrayList<>())
                 .build();
 
+
+        // 재고검증 응답을 partId -> itemInfo 맵으로
+        Map<Long, InventoryCheckItemResponseDTO> itemByPartId = Optional.ofNullable(checkResult.getOrderList())
+                .orElseGet(Collections::emptyList)
+                .stream()
+                .collect(Collectors.toMap(InventoryCheckItemResponseDTO::getPartId, Function.identity(), (a, b) -> a));
+
+        // 요청된 아이템을 주문 아이템으로 변환
         for (OrderItemRequestDTO itemRequest : orderRequestDTO.getOrderItems()) {
+            InventoryCheckItemResponseDTO info = itemByPartId.get(itemRequest.getPartId());
+
             OrderItem orderItem = OrderItem.builder()
                     .order(order)
                     .partId(itemRequest.getPartId())
                     .amount(itemRequest.getAmount())
+                    .categoryName(info.getCategoryName())
+                    .name(info.getName())
                     .build();
+
             order.getOrderItems().add(orderItem);
         }
 

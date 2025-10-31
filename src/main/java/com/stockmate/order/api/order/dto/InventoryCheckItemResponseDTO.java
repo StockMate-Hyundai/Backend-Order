@@ -14,4 +14,6 @@ public class InventoryCheckItemResponseDTO {
     private int requestedAmount;
     private int availableStock;
     private boolean canOrder;
+    private String categoryName;
+    private String name;
 }
