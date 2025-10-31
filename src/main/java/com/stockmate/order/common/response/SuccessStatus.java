@@ -26,9 +26,12 @@ public enum SuccessStatus {
 	SEND_CART_DATA_SUCCESS(HttpStatus.OK,"장바구니 조회 성공"),
 	REGISTER_SHIPPING_SUCCESS(HttpStatus.OK,"배송 등록 성공"),
 	REQUEST_RECEIVING_PROCESS_SUCCESS(HttpStatus.OK,"입고 처리 요청 성공"),
-	CHECK_ORDER_DATA_SUCCESS(HttpStatus.OK, "주문 검증 조회 성공"),
-	GET_TODAY_DASHBOARD_SUCCESS(HttpStatus.OK, "금일 대시보드 조회 성공"),
+    CHECK_ORDER_DATA_SUCCESS(HttpStatus.OK, "주문 검증 조회 성공"),
+    GET_TODAY_DASHBOARD_SUCCESS(HttpStatus.OK, "금일 대시보드 조회 성공"),
+    GET_CATEGORY_SALES_SUCCESS(HttpStatus.OK, "카테고리별 판매량 조회 성공"),
+    GET_RECENT_ORDERS_SUCCESS(HttpStatus.OK, "최근 주문 이력 조회 성공"),
 	GET_TODAY_INOUT_DASHBOARD_SUCCESS(HttpStatus.OK, "금일 시간대별 입출고 조회 성공"),
+	GET_TOP_PARTS_SUCCESS(HttpStatus.OK, "TOP 판매 부품 조회 성공"),
 
 	/**
 	 * 201
