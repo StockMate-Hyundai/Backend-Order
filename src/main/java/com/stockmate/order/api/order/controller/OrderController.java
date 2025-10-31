@@ -124,6 +124,18 @@ public class OrderController {
         return ApiResponse.success(SuccessStatus.CHECK_ORDER_DATA_SUCCESS, response);
     }
 
+    @Operation(summary = "출고 대기 변경 API", description = "창고 관리자가 주문 상태를 PENDING_SHIPPING으로 변경합니다. WAREHOUSE 역할만 가능합니다.")
+    @PutMapping("/pending-shipping/{orderId}")
+    public ResponseEntity<ApiResponse<Void>> updateOrderStatusToPendingShipping(@PathVariable Long orderId, @AuthenticationPrincipal SecurityUser securityUser) {
+
+        log.info("주문 상태 출고 대기 변경 요청 - Order ID: {}, 요청자 ID: {}, 요청자 Role: {}", orderId, securityUser.getMemberId(), securityUser.getRole());
+
+        orderService.updateOrderStatusToPendingShipping(orderId, securityUser.getRole());
+        log.info("주문 상태 출고 대기 변경 완료 - Order ID: {}", orderId);
+
+        return ApiResponse.success_only(SuccessStatus.UPDATE_ORDER_STATUS_TO_PENDING_SHIPPING_SUCCESS);
+    }
+
     @Operation(summary = "배송 등록 API", description = "주문에 배송 정보를 등록합니다. WAREHOUSE 역할만 가능합니다.")
     @PostMapping("/shipping")
     public ResponseEntity<ApiResponse<ShippingRegistrationResponseDTO>> registerShipping(@RequestBody ShippingRegistrationRequestDTO requestDTO, @AuthenticationPrincipal SecurityUser securityUser) {
