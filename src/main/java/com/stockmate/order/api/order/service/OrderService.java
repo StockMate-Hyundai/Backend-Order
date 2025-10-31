@@ -465,6 +465,7 @@ public class OrderService {
                 // itemList에는 이미 partId와 quantity가 포함되어 있음
                 inventoryService.registerReceivingHistory(
                         order.getMemberId(), // 가맹점 ID
+                        order.getOrderId(), // 주문 ID
                         order.getOrderNumber(), // 주문 번호
                         message, // 메시지
                         "RECEIVED", // 상태
