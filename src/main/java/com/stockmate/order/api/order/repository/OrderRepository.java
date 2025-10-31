@@ -27,8 +27,8 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
     @Query("SELECT o FROM Order o LEFT JOIN FETCH o.orderItems WHERE o.orderNumber = :orderNumber")
     Optional<Order> findByOrderNumberWithItems(@Param("orderNumber") String orderNumber);
     
-    // 대시보드: 금일 주문 수
-    @Query("SELECT COUNT(o) FROM Order o WHERE o.createdAt >= :startOfDay AND o.createdAt < :endOfDay")
+    // 대시보드: 금일 주문 수 (PAY_COMPLETED 상태만 집계)
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.orderStatus = 'PAY_COMPLETED' AND o.createdAt >= :startOfDay AND o.createdAt < :endOfDay")
     long countTodayOrders(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
     
     // 대시보드: 금일 배송 처리된 수 (SHIPPING 상태로 변경된 수)
@@ -43,8 +43,8 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
     @Query("SELECT COALESCE(SUM(o.totalPrice), 0) FROM Order o WHERE o.orderStatus = 'PAY_COMPLETED' AND o.createdAt >= :startOfDay AND o.createdAt < :endOfDay")
     long calculateTodayRevenue(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
     
-    // 대시보드: 시간대별 주문 수
-    @Query("SELECT HOUR(o.createdAt), COUNT(o) FROM Order o WHERE o.createdAt >= :startOfDay AND o.createdAt < :endOfDay GROUP BY HOUR(o.createdAt) ORDER BY HOUR(o.createdAt)")
+    // 대시보드: 시간대별 주문 수 (PAY_COMPLETED 상태만 집계)
+    @Query("SELECT HOUR(o.createdAt), COUNT(o) FROM Order o WHERE o.orderStatus = 'PAY_COMPLETED' AND o.createdAt >= :startOfDay AND o.createdAt < :endOfDay GROUP BY HOUR(o.createdAt) ORDER BY HOUR(o.createdAt)")
     List<Object[]> countOrdersByHour(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
     
     // 대시보드: 시간대별 배송 처리 수
