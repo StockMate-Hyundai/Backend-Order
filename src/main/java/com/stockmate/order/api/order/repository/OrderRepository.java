@@ -58,4 +58,38 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
     // 대시보드: 시간대별 매출
     @Query("SELECT HOUR(o.createdAt), COALESCE(SUM(o.totalPrice), 0) FROM Order o WHERE o.orderStatus = 'PAY_COMPLETED' AND o.createdAt >= :startOfDay AND o.createdAt < :endOfDay GROUP BY HOUR(o.createdAt) ORDER BY HOUR(o.createdAt)")
     List<Object[]> calculateRevenueByHour(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
+    
+    // 대시보드: 카테고리별 판매량
+    @Query("""
+        SELECT oi.categoryName, SUM(oi.amount)
+        FROM Order o
+        JOIN o.orderItems oi
+        WHERE o.orderStatus = 'PAY_COMPLETED'
+        AND o.createdAt >= :startOfDay AND o.createdAt < :endOfDay
+        GROUP BY oi.categoryName
+        ORDER BY SUM(oi.amount) DESC
+    """)
+    List<Object[]> getCategorySalesByDate(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
+    
+    // 대시보드: TOP 판매 부품 (부품명+카테고리 기준, 판매량 상위)
+    @Query("""
+        SELECT oi.name, oi.categoryName, SUM(oi.amount)
+        FROM Order o
+        JOIN o.orderItems oi
+        WHERE o.orderStatus = 'PAY_COMPLETED'
+        AND o.createdAt >= :startOfDay AND o.createdAt < :endOfDay
+        GROUP BY oi.name, oi.categoryName
+        ORDER BY SUM(oi.amount) DESC
+    """)
+    List<Object[]> getTopPartsByDate(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
+    
+    // 대시보드: 최근 주문 이력 (지정된 날짜, 최대 10개, 모든 상태)
+    @Query("""
+        SELECT o.orderId, o.createdAt, o.orderNumber, o.totalPrice, o.memberId,
+               (SELECT SUM(oi.amount) FROM OrderItem oi WHERE oi.order.orderId = o.orderId)
+        FROM Order o
+        WHERE o.createdAt >= :startOfDay AND o.createdAt < :endOfDay
+        ORDER BY o.createdAt DESC
+    """)
+    List<Object[]> getRecentOrdersByDate(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
 }
