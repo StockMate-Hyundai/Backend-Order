@@ -7,6 +7,7 @@ import com.stockmate.order.api.order.entity.OrderStatus;
 import com.stockmate.order.api.order.entity.PaymentType;
 import com.stockmate.order.api.order.repository.OrderRepository;
 import com.stockmate.order.api.websocket.handler.OrderWebSocketHandler;
+import com.stockmate.order.api.websocket.handler.DashboardWebSocketHandler;
 import com.stockmate.order.common.config.security.Role;
 import com.stockmate.order.common.config.security.SecurityUser;
 import com.stockmate.order.common.config.webClient.WebClientConfig;
@@ -44,6 +45,7 @@ public class OrderService {
     private final KafkaProducerService kafkaProducerService;
     private final OrderTransactionService orderTransactionService;
     private final OrderWebSocketHandler orderWebSocketHandler;
+    private final DashboardWebSocketHandler dashboardWebSocketHandler;
     private final ApplicationEventPublisher applicationEventPublisher;
 
     @Transactional
@@ -112,6 +114,14 @@ public class OrderService {
         PayRequestEvent payRequestEvent = PayRequestEvent.of(savedOrder, memberId);
 
         applicationEventPublisher.publishEvent(payRequestEvent);
+
+        // 관리자에게 새 주문 알림 전송
+        try {
+            dashboardWebSocketHandler.notifyAdminNewOrder(savedOrder.getOrderId(), savedOrder.getOrderNumber());
+        } catch (Exception e) {
+            log.error("관리자 알림 전송 중 오류 발생 - Order ID: {}, Error: {}", savedOrder.getOrderId(), e.getMessage(), e);
+            // 알림 실패해도 주문 생성은 진행
+        }
 
         log.info("주문 완료 - Order ID: {}, Order Number: {}, Member ID: {}, 주문 항목 수: {}, 총 금액: {}, Status: {}",
                 savedOrder.getOrderId(), savedOrder.getOrderNumber(), savedOrder.getMemberId(),
@@ -853,6 +863,14 @@ public class OrderService {
                         "주문이 승인되었습니다.",
                         null
                 );
+
+                // 창고관리자에게 주문 승인 알림 전송
+                try {
+                    dashboardWebSocketHandler.notifyWarehouseOrderApproved(orderId, orderWithItems.getOrderNumber());
+                } catch (Exception e) {
+                    log.error("창고관리자 알림 전송 중 오류 발생 - Order ID: {}, Error: {}", orderId, e.getMessage(), e);
+                    // 알림 실패해도 주문 승인은 완료
+                }
 
             } catch (Exception e) {
                 log.error("재고 차감 API 호출 실패 - Order ID: {}, 에러: {}", orderId, e.getMessage(), e);
