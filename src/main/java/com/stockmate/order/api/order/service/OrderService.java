@@ -229,7 +229,7 @@ public class OrderService {
                 requestDTO.getStatus(), requestDTO.getPartId(), requestDTO.getMemberId(),
                 requestDTO.getStartDate(), requestDTO.getEndDate(), requestDTO.getPage(), requestDTO.getSize(), role);
 
-        if (role != Role.ADMIN && role != Role.SUPER_ADMIN) {
+        if (role != Role.ADMIN && role != Role.SUPER_ADMIN && role != Role.WAREHOUSE) {
             log.error("권한 부족 - Role: {}", role);
             throw new BadRequestException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
         }
@@ -922,4 +922,51 @@ public class OrderService {
                 ))
                 .toList();
     }
+  
+    // 네비게이션용 부품 정보 조회 (주문 번호로)
+    @Transactional(readOnly = true)
+    public NavigationPartsResponseDTO getPartsForNavigation(List<String> orderNumbers) {
+        log.info("네비게이션용 부품 정보 조회 시작 - 주문 번호 수: {}", orderNumbers.size());
+
+        // 주문 번호로 주문 조회
+        List<Order> orders = orderRepository.findAllByOrderNumberIn(orderNumbers);
+        if (orders.isEmpty()) {
+            log.warn("해당 주문 번호로 조회된 주문이 없음 - Order Numbers: {}", orderNumbers);
+            throw new NotFoundException("해당 주문을 찾을 수 없습니다.");
+        }
+
+        // 부품 ID 수집
+        Set<Long> partIds = orders.stream()
+                .flatMap(order -> order.getOrderItems().stream())
+                .map(OrderItem::getPartId)
+                .collect(Collectors.toSet());
+
+        log.info("조회할 부품 ID 수: {}", partIds.size());
+
+        // Parts 서버에서 부품 상세 정보 조회 (위치 정보 포함)
+        Map<Long, PartDetailResponseDTO> partDetailMap = inventoryService.getPartDetails(new ArrayList<>(partIds));
+
+        // 응답 DTO 생성
+        List<NavigationPartsResponseDTO.PartLocationInfo> partLocations = new ArrayList<>();
+        for (Order order : orders) {
+            for (OrderItem item : order.getOrderItems()) {
+                PartDetailResponseDTO partDetail = partDetailMap.get(item.getPartId());
+                if (partDetail != null && partDetail.getLocation() != null) {
+                    partLocations.add(NavigationPartsResponseDTO.PartLocationInfo.builder()
+                            .partId(item.getPartId())
+                            .partName(item.getName())
+                            .location(partDetail.getLocation())
+                            .orderNumber(order.getOrderNumber())
+                            .quantity(item.getAmount())
+                            .build());
+                }
+            }
+        }
+
+        log.info("네비게이션용 부품 정보 조회 완료 - 총 부품 위치 수: {}", partLocations.size());
+        return NavigationPartsResponseDTO.builder()
+                .partLocations(partLocations)
+                .build();
+    }
+
 }
