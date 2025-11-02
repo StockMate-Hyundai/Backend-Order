@@ -33,6 +33,11 @@ public enum SuccessStatus {
     GET_RECENT_ORDERS_SUCCESS(HttpStatus.OK, "최근 주문 이력 조회 성공"),
 	GET_TODAY_INOUT_DASHBOARD_SUCCESS(HttpStatus.OK, "금일 시간대별 입출고 조회 성공"),
 	GET_TOP_PARTS_SUCCESS(HttpStatus.OK, "TOP 판매 부품 조회 성공"),
+	GET_UNREAD_NOTIFICATIONS_SUCCESS(HttpStatus.OK, "읽지 않은 알림 조회 성공"),
+	GET_ALL_NOTIFICATIONS_SUCCESS(HttpStatus.OK, "모든 알림 조회 성공"),
+	GET_UNREAD_COUNT_SUCCESS(HttpStatus.OK, "읽지 않은 알림 개수 조회 성공"),
+	MARK_NOTIFICATION_READ_SUCCESS(HttpStatus.OK, "알림 읽음 처리 성공"),
+	MARK_ALL_NOTIFICATIONS_READ_SUCCESS(HttpStatus.OK, "모든 알림 읽음 처리 성공"),
 
 	/**
 	 * 201
