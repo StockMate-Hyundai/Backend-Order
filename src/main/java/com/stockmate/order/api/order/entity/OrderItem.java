@@ -25,8 +25,7 @@ public class OrderItem {
     private Long partId;
 
     private int amount; // 주문수량
-
     private String categoryName;
-
     private String name;
+    private Long price;
 }

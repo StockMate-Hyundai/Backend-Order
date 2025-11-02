@@ -27,9 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.web.reactive.function.client.WebClient;
 
-import java.time.Duration;
+import java.time.YearMonth;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -102,6 +101,7 @@ public class OrderService {
                     .amount(itemRequest.getAmount())
                     .categoryName(info.getCategoryName())
                     .name(info.getName())
+                    .price(info.getPrice())
                     .build();
 
             order.getOrderItems().add(orderItem);
@@ -903,6 +903,26 @@ public class OrderService {
         }
     }
 
+    // 카테고리별 지출 정보
+    public List<CategorySpendingDto> getMonthlyCategorySpending(Long userId) {
+        log.info("📌 [이전달 카테고리 소비 조회 시작] userId={}", userId);
+
+        YearMonth lastMonth = YearMonth.now().minusMonths(1);
+        int year = lastMonth.getYear();
+        int month = lastMonth.getMonthValue();
+
+        List<Object[]> rows = orderRepository.getCategorySpending(userId, year, month);
+
+        log.info("🎯 [이전달 카테고리 소비 조회 종료] userId={}, month={} 완료", userId, lastMonth);
+
+        return rows.stream()
+                .map(r -> new CategorySpendingDto(
+                        (String) r[0],
+                        ((Number) r[1]).longValue()
+                ))
+                .toList();
+    }
+  
     // 네비게이션용 부품 정보 조회 (주문 번호로)
     @Transactional(readOnly = true)
     public NavigationPartsResponseDTO getPartsForNavigation(List<String> orderNumbers) {

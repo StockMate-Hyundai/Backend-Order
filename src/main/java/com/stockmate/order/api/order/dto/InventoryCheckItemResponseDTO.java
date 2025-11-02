@@ -16,4 +16,5 @@ public class InventoryCheckItemResponseDTO {
     private boolean canOrder;
     private String categoryName;
     private String name;
+    private Long price;
 }
