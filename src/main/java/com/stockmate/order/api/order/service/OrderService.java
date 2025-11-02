@@ -229,7 +229,7 @@ public class OrderService {
                 requestDTO.getStatus(), requestDTO.getPartId(), requestDTO.getMemberId(),
                 requestDTO.getStartDate(), requestDTO.getEndDate(), requestDTO.getPage(), requestDTO.getSize(), role);
 
-        if (role != Role.ADMIN && role != Role.SUPER_ADMIN) {
+        if (role != Role.ADMIN && role != Role.SUPER_ADMIN && role != Role.WAREHOUSE) {
             log.error("권한 부족 - Role: {}", role);
             throw new BadRequestException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
         }
