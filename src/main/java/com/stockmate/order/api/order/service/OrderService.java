@@ -102,6 +102,7 @@ public class OrderService {
                     .amount(itemRequest.getAmount())
                     .categoryName(info.getCategoryName())
                     .name(info.getName())
+                    .price(info.getPrice())
                     .build();
 
             order.getOrderItems().add(orderItem);
