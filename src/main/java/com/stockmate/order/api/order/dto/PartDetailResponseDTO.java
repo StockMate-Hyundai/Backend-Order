@@ -21,4 +21,5 @@ public class PartDetailResponseDTO {
     private String engName;
     private String categoryName;
     private int amount;
+    private String location; // 창고 위치 (예: "A5-2")
 }
