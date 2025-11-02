@@ -96,4 +96,23 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
         ORDER BY o.createdAt DESC
     """)
     List<Object[]> getRecentOrdersByDate(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
+
+    // 카테고리별 지출 금액
+    @Query("""
+        SELECT
+            oi.categoryName,
+            SUM(oi.price * oi.amount)
+        FROM Order o
+            JOIN o.orderItems oi
+        WHERE o.memberId = :userId
+            AND o.orderStatus NOT IN ('ORDER_COMPLETED', 'FAILED', 'REJECTED')
+            AND FUNCTION('YEAR', o.createdAt) = :year
+            AND FUNCTION('MONTH', o.createdAt) = :month
+        GROUP BY oi.categoryName
+    """)
+    List<Object[]> getCategorySpending(
+            @Param("userId") Long userId,
+            @Param("year") int year,
+            @Param("month") int month
+    );
 }

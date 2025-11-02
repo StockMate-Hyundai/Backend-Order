@@ -15,6 +15,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Tag(name = "Order", description = "주문 관련 API 입니다.")
 @RestController
@@ -197,6 +198,16 @@ public class OrderController {
         return ApiResponse.success(SuccessStatus.SEND_ORDER_LIST_SUCCESS, response);
     }
 
+    @Operation(summary = "카테고리별 지출 금액 조회 API", description = "저번달의 카테고리별 지출 금액을 조회합니다.")
+    @GetMapping("/category-spend")
+    public ResponseEntity<ApiResponse<List<CategorySpendingDto>>> getMonthlyCategorySpending(
+//            @AuthenticationPrincipal SecurityUser securityUser
+    ) {
+//        List<CategorySpendingDto> response = orderService.getMonthlyCategorySpending(securityUser.getMemberId());
+        List<CategorySpendingDto> response = orderService.getMonthlyCategorySpending(9L);
+        return ApiResponse.success(SuccessStatus.GET_MONTHLY_SPEND_SUCCESS, response);
+    }
+  
     @Operation(summary = "네비게이션용 부품 정보 조회 API", description = "주문 번호 리스트로 부품 위치 정보를 조회합니다.")
     @PostMapping("/navigation/parts")
     public ResponseEntity<ApiResponse<NavigationPartsResponseDTO>> getPartsForNavigation(@RequestBody NavigationPartsRequestDTO requestDTO) {
