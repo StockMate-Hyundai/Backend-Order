@@ -1,6 +1,8 @@
 package com.stockmate.order.api.websocket.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.stockmate.order.api.notification.entity.NotificationType;
+import com.stockmate.order.api.notification.service.DashboardNotificationService;
 import com.stockmate.order.api.websocket.dto.DashboardNotificationResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +25,7 @@ import org.springframework.web.socket.PingMessage;
 public class DashboardWebSocketHandler implements WebSocketHandler {
 
     private final ObjectMapper objectMapper;
+    private final DashboardNotificationService notificationService;
     
     // 세션 관리
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
@@ -51,6 +54,10 @@ public class DashboardWebSocketHandler implements WebSocketHandler {
             
             log.info("대시보드 WebSocket 세션 등록 완료 - Session ID: {}, Type: {}, 활성 세션 수: {}", 
                     session.getId(), type, typeToSessions.get(type).size());
+            
+            // 참고: 읽지 않은 알림은 REST API (/api/notifications/unread)로 조회해야 합니다.
+            // 웹소켓은 연결 후 발생하는 새로운 알림만 실시간으로 전송합니다.
+            
         } catch (Exception e) {
             log.error("대시보드 WebSocket 연결 중 오류 발생 - Session ID: {}, Error: {}", session.getId(), e.getMessage(), e);
             session.close(CloseStatus.NOT_ACCEPTABLE.withReason("연결 오류"));
@@ -104,15 +111,27 @@ public class DashboardWebSocketHandler implements WebSocketHandler {
     public void notifyAdminNewOrder(Long orderId, String orderNumber) {
         log.info("관리자에게 새 주문 알림 전송 - Order ID: {}, Order Number: {}", orderId, orderNumber);
         
+        String message = orderNumber + " 신규 주문이 발생하였습니다.";
+        
+        // DB에 알림 저장 (웹소켓 연결 여부와 관계없이 항상 저장)
+        Long notificationId = null;
+        try {
+            var savedNotification = notificationService.saveNotification(NotificationType.ADMIN, message, orderId, orderNumber);
+            notificationId = savedNotification.getId();
+        } catch (Exception e) {
+            log.error("알림 DB 저장 중 오류 발생 - Order ID: {}, Error: {}", orderId, e.getMessage(), e);
+        }
+        
+        // 연결된 관리자 세션에 실시간 전송
         Set<String> adminSessions = typeToSessions.get("admin");
         if (adminSessions == null || adminSessions.isEmpty()) {
-            log.warn("연결된 관리자 세션이 없음 - Order ID: {}", orderId);
+            log.warn("연결된 관리자 세션이 없음 - Order ID: {} (DB에는 저장됨)", orderId);
             return;
         }
         
-        String message = orderNumber + " 신규 주문이 발생하였습니다.";
         DashboardNotificationResponse notification = DashboardNotificationResponse.builder()
                 .type("DASHBOARD_NOTIFICATION")
+                .notificationId(notificationId)
                 .message(message)
                 .data(DashboardNotificationResponse.DashboardData.builder()
                         .orderId(orderId)
@@ -143,15 +162,27 @@ public class DashboardWebSocketHandler implements WebSocketHandler {
     public void notifyWarehouseOrderApproved(Long orderId, String orderNumber) {
         log.info("창고관리자에게 주문 승인 알림 전송 - Order ID: {}, Order Number: {}", orderId, orderNumber);
         
+        String message = orderNumber + " 신규 주문 승인이 발생하였습니다.";
+        
+        // DB에 알림 저장 (웹소켓 연결 여부와 관계없이 항상 저장)
+        Long notificationId = null;
+        try {
+            var savedNotification = notificationService.saveNotification(NotificationType.WAREHOUSE, message, orderId, orderNumber);
+            notificationId = savedNotification.getId();
+        } catch (Exception e) {
+            log.error("알림 DB 저장 중 오류 발생 - Order ID: {}, Error: {}", orderId, e.getMessage(), e);
+        }
+        
+        // 연결된 창고관리자 세션에 실시간 전송
         Set<String> warehouseSessions = typeToSessions.get("warehouse");
         if (warehouseSessions == null || warehouseSessions.isEmpty()) {
-            log.warn("연결된 창고관리자 세션이 없음 - Order ID: {}", orderId);
+            log.warn("연결된 창고관리자 세션이 없음 - Order ID: {} (DB에는 저장됨)", orderId);
             return;
         }
         
-        String message = orderNumber + " 신규 주문 승인이 발생하였습니다.";
         DashboardNotificationResponse notification = DashboardNotificationResponse.builder()
                 .type("DASHBOARD_NOTIFICATION")
+                .notificationId(notificationId)
                 .message(message)
                 .data(DashboardNotificationResponse.DashboardData.builder()
                         .orderId(orderId)
@@ -175,6 +206,7 @@ public class DashboardWebSocketHandler implements WebSocketHandler {
         log.info("창고관리자 알림 전송 완료 - Order ID: {}, Order Number: {}, 전송된 세션 수: {}", 
                 orderId, orderNumber, sentCount);
     }
+
 
     private void sendMessage(WebSocketSession session, Object message) {
         try {
