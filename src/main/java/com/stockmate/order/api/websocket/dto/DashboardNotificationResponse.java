@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 @Builder
 public class DashboardNotificationResponse {
     private String type; // "DASHBOARD_NOTIFICATION"
+    private Long notificationId; // 알림 ID (읽음 처리 등에 사용)
     private String message; // "SMO-123 신규 주문이 발생하였습니다." 또는 "SMO-123 신규 주문 승인이 발생하였습니다."
     private DashboardData data; // orderId, orderNumber
 
