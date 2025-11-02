@@ -38,6 +38,7 @@ public enum SuccessStatus {
 	GET_UNREAD_COUNT_SUCCESS(HttpStatus.OK, "읽지 않은 알림 개수 조회 성공"),
 	MARK_NOTIFICATION_READ_SUCCESS(HttpStatus.OK, "알림 읽음 처리 성공"),
 	MARK_ALL_NOTIFICATIONS_READ_SUCCESS(HttpStatus.OK, "모든 알림 읽음 처리 성공"),
+	SEND_NAVIGATION_PARTS_SUCCESS(HttpStatus.OK, "네비게이션용 부품 정보 조회 성공"),
 
 	/**
 	 * 201
