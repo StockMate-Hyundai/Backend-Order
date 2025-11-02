@@ -197,4 +197,15 @@ public class OrderController {
         return ApiResponse.success(SuccessStatus.SEND_ORDER_LIST_SUCCESS, response);
     }
 
+    @Operation(summary = "네비게이션용 부품 정보 조회 API", description = "주문 번호 리스트로 부품 위치 정보를 조회합니다.")
+    @PostMapping("/navigation/parts")
+    public ResponseEntity<ApiResponse<NavigationPartsResponseDTO>> getPartsForNavigation(@RequestBody NavigationPartsRequestDTO requestDTO) {
+
+        log.info("네비게이션용 부품 정보 조회 요청 - 주문 번호 수: {}", requestDTO.getOrderNumbers().size());
+        NavigationPartsResponseDTO response = orderService.getPartsForNavigation(requestDTO.getOrderNumbers());
+
+        log.info("네비게이션용 부품 정보 조회 완료 - 총 부품 위치 수: {}", response.getPartLocations().size());
+        return ApiResponse.success(SuccessStatus.SEND_NAVIGATION_PARTS_SUCCESS, response);
+    }
+
 }

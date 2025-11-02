@@ -27,6 +27,10 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
     @Query("SELECT o FROM Order o LEFT JOIN FETCH o.orderItems WHERE o.orderNumber = :orderNumber")
     Optional<Order> findByOrderNumberWithItems(@Param("orderNumber") String orderNumber);
     
+    // orderNumber 리스트로 주문 조회 (OrderItems와 함께 fetch join)
+    @Query("SELECT DISTINCT o FROM Order o LEFT JOIN FETCH o.orderItems WHERE o.orderNumber IN :orderNumbers")
+    List<Order> findAllByOrderNumberIn(@Param("orderNumbers") List<String> orderNumbers);
+    
     // 대시보드: 금일 주문 수 (취소 제외한 모든 주문 집계)
     @Query("SELECT COUNT(o) FROM Order o WHERE o.orderStatus != 'CANCELLED' AND o.createdAt >= :startOfDay AND o.createdAt < :endOfDay")
     long countTodayOrders(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
