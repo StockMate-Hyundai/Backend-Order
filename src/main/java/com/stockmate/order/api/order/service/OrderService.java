@@ -918,7 +918,7 @@ public class OrderService {
         return rows.stream()
                 .map(r -> new CategorySpendingDto(
                         (String) r[0],
-                        ((Number) r[1]).longValue()
+                        r[1] == null ? 0L : ((Number) r[1]).longValue()
                 ))
                 .toList();
     }
