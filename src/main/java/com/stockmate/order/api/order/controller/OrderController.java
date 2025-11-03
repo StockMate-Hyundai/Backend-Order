@@ -201,10 +201,9 @@ public class OrderController {
     @Operation(summary = "카테고리별 지출 금액 조회 API", description = "저번달의 카테고리별 지출 금액을 조회합니다.")
     @GetMapping("/category-spend")
     public ResponseEntity<ApiResponse<List<CategorySpendingDto>>> getMonthlyCategorySpending(
-//            @AuthenticationPrincipal SecurityUser securityUser
+            @AuthenticationPrincipal SecurityUser securityUser
     ) {
-//        List<CategorySpendingDto> response = orderService.getMonthlyCategorySpending(securityUser.getMemberId());
-        List<CategorySpendingDto> response = orderService.getMonthlyCategorySpending(9L);
+        List<CategorySpendingDto> response = orderService.getMonthlyCategorySpending(securityUser.getMemberId());
         return ApiResponse.success(SuccessStatus.GET_MONTHLY_SPEND_SUCCESS, response);
     }
   
