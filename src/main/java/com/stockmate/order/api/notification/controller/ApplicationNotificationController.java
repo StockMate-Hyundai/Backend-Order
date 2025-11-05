@@ -24,7 +24,7 @@ public class ApplicationNotificationController {
     private final ApplicationNotificationService applicationNotificationService;
 
     @Operation(summary = "알림 전체 조회")
-    @GetMapping("/{userId}")
+    @GetMapping("/")
     public ResponseEntity<ApiResponse<List<ApplicationNotification>>> getNotifications(
             @AuthenticationPrincipal SecurityUser securityUser
     ) {
@@ -33,7 +33,7 @@ public class ApplicationNotificationController {
     }
 
     @Operation(summary = "읽지 않은 알림 조회")
-    @GetMapping("/{userId}/unread")
+    @GetMapping("/unread")
     public ResponseEntity<ApiResponse<List<ApplicationNotification>>> getUnread(
             @AuthenticationPrincipal SecurityUser securityUser
     ) {
@@ -42,7 +42,7 @@ public class ApplicationNotificationController {
     }
 
     @Operation(summary = "읽지 않은 알림 개수 조회")
-    @GetMapping("/{userId}/unread/count")
+    @GetMapping("/unread/count")
     public ResponseEntity<ApiResponse<Long>> getUnreadCount(
             @AuthenticationPrincipal SecurityUser securityUser
     ) {
@@ -51,16 +51,16 @@ public class ApplicationNotificationController {
     }
 
     @Operation(summary = "알림 읽음 처리")
-    @PatchMapping("/{notificationId}/read")
+    @PatchMapping("/read")
     public ResponseEntity<ApiResponse<Void>> markAsRead(
-            @PathVariable Long notificationId
+            @RequestParam Long notificationId
     ) {
         applicationNotificationService.markAsRead(notificationId);
         return ApiResponse.success_only(SuccessStatus.SET_UNREAD_CHANGE);
     }
 
     @Operation(summary = "전체 알림 읽음 처리")
-    @PatchMapping("/{userId}/read-all")
+    @PatchMapping("/read-all")
     public ResponseEntity<ApiResponse<Void>> markAllAsRead(
             @AuthenticationPrincipal SecurityUser securityUser
     ) {
