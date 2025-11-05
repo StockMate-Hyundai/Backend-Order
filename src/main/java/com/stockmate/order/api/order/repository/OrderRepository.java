@@ -2,6 +2,7 @@ package com.stockmate.order.api.order.repository;
 
 import com.stockmate.order.api.order.entity.Order;
 import com.stockmate.order.api.order.entity.OrderStatus;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -115,7 +116,7 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
             @Param("year") int year,
             @Param("month") int month
     );
-    
+
     // ===== 월별 리포트 쿼리 =====
     
     // 월별 총 주문 건수 (취소 제외)
@@ -355,4 +356,8 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
         ORDER BY SUBSTRING(oi.location, 1, 1)
     """)
     List<Object[]> countShippedOrdersByWarehouse(@Param("year") int year, @Param("month") int month);
+           
+    @EntityGraph(attributePaths = {"orderItems"})
+    @Query("SELECT o FROM Order o WHERE o.orderId IN :orderIds")
+    List<Order> findWithItemsByIdIn(@Param("orderIds") List<Long> orderIds);
 }
