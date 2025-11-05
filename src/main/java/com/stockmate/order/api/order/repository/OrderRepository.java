@@ -2,6 +2,7 @@ package com.stockmate.order.api.order.repository;
 
 import com.stockmate.order.api.order.entity.Order;
 import com.stockmate.order.api.order.entity.OrderStatus;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -115,4 +116,7 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
             @Param("year") int year,
             @Param("month") int month
     );
-}
+
+    @EntityGraph(attributePaths = {"orderItems", "orderItems.part"})
+    @Query("SELECT o FROM Order o WHERE o.orderId IN :orderIds")
+    List<Order> findWithItemsByIdIn(@Param("orderIds") List<Long> orderIds);}

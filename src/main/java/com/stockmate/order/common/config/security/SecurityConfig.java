@@ -46,7 +46,7 @@ public class SecurityConfig {
                                 "/h2-console/**", "/v3/api-docs"
                         ).permitAll() // 스웨거, H2, healthCheck 허가
                         .requestMatchers(
-                                "/api/v1/order/health-check", "/api/v1/order/navigation/parts"
+                                "/api/v1/order/health-check", "/api/v1/order/navigation/parts", "/api/v1/order/deposit-detail"
                         ).permitAll()
                         .requestMatchers(
                                 "/ws/**"

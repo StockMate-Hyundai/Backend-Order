@@ -116,6 +116,17 @@ public class OrderController {
         return ApiResponse.success(SuccessStatus.SEND_ORDER_DETAIL_SUCCESS, response);
     }
 
+    @Operation(summary = "주문 상세 배치 조회 API", description = "주문 ID들로 주문 부품의 상세 정보를 조회합니다.")
+    @PostMapping("/deposit-detail")
+    public ResponseEntity<ApiResponse<List<DepositListResponseDTO>>> getDepositPartDetail(
+            @RequestBody List<Long> orderIds
+    ) {
+        log.info("주문 상세 조회 요청 - Order IDs: {}", orderIds);
+        List<DepositListResponseDTO> response = orderService.getDepositPartDetail(orderIds);
+        log.info("주문 상세 조회 완료 - Order IDs: {}, 조회된 주문 수: {}", orderIds, response.size());
+        return ApiResponse.success(SuccessStatus.SEND_ORDER_DETAIL_SUCCESS, response);
+    }
+
     @Operation(summary = "주문 검증 조회 API", description = "주문 ID로 검증 데이터를 조회합니다.")
     @GetMapping("validate/{orderId}")
     public ResponseEntity<ApiResponse<OrderValidateDTO>> getValidateOrder(@PathVariable Long orderId, @AuthenticationPrincipal SecurityUser securityUser) {
