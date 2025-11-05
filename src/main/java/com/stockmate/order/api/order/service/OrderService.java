@@ -276,7 +276,7 @@ public class OrderService {
         log.info("외부 서버 호출 완료 - 조회된 사용자: {}, 조회된 부품: {}", userMap.size(), partMap.size());
 
         List<OrderDetailResponseDTO> content = orderPage.getContent().stream()
-                .map(order -> toOrderDetailResponseDTO(order, userMap, partMap))
+                .map(order -> toOrderDetailResponseDTO(order, partMap))
                 .collect(Collectors.toList());
 
         OrderListResponseDTO response = OrderListResponseDTO.builder()
@@ -318,7 +318,7 @@ public class OrderService {
 
     private OrderDetailResponseDTO toOrderDetailResponseDTO(
             Order order,
-            Map<Long, UserBatchResponseDTO> userMap,
+//            Map<Long, UserBatchResponseDTO> userMap,
             Map<Long, PartDetailResponseDTO> partMap) {
 
         List<OrderItemDetailDTO> orderItemDetails = order.getOrderItems().stream()
@@ -333,7 +333,7 @@ public class OrderService {
                 .orderId(order.getOrderId())
                 .orderNumber(order.getOrderNumber())
                 .memberId(order.getMemberId())
-                .userInfo(userMap.get(order.getMemberId()))
+//                .userInfo(userMap.get(order.getMemberId()))
                 .orderItems(orderItemDetails)
                 .paymentType(order.getPaymentType())
                 .etc(order.getEtc())
@@ -673,7 +673,49 @@ public class OrderService {
 
         log.info("주문 상세 조회 완료 - Order ID: {}, Order Number: {}", orderId, order.getOrderNumber());
 
-        return toOrderDetailResponseDTO(order, userMap, partMap);
+        return toOrderDetailResponseDTO(order, partMap);
+    }
+
+    @Transactional(readOnly = true)
+    public List<DepositListResponseDTO> getDepositPartDetail(List<Long> orderIds) {
+        log.info("📦 주문 상세 조회(Batch) - orderIds={}", orderIds);
+
+        // 주문 + 주문 아이템 한 번에 조회 (fetch join)
+        List<Order> orders = orderRepository.findWithItemsByIdIn(orderIds);
+
+        if (orders.isEmpty()) {
+            log.warn("⚠️ 주문 정보 없음 - orderIds={}", orderIds);
+            throw new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
+        }
+
+        // 모든 orderItem → partId 추출
+        List<Long> partIds = orders.stream()
+                .flatMap(order -> order.getOrderItems().stream())
+                .map(OrderItem::getPartId)
+                .distinct()
+                .toList();
+
+        // Part 상세정보 batch 조회
+        Map<Long, PartDetailResponseDTO> partMap = inventoryService.getPartDetails(partIds);
+
+        log.info("📦 주문 상세 조회(Batch) 완료");
+
+        // ✅ 묶어서 DTO 변환
+        return orders.stream()
+                .map(order -> {
+                    List<DepositPartDetailDTO> parts = order.getOrderItems().stream()
+                            .map(OrderItem::getPartId)
+                            .map(partMap::get)
+                            .filter(Objects::nonNull)
+                            .map(DepositPartDetailDTO::of)
+                            .toList();
+
+                    return DepositListResponseDTO.builder()
+                            .orderId(order.getOrderNumber())
+                            .orderItems(parts)
+                            .build();
+                })
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -721,7 +763,7 @@ public class OrderService {
         log.info("외부 서버 호출 완료 - 조회된 부품: {}", partMap.size());
 
         List<OrderDetailResponseDTO> content = orderPage.getContent().stream()
-                .map(order -> toOrderDetailResponseDTO(order, userMap, partMap))
+                .map(order -> toOrderDetailResponseDTO(order, partMap))
                 .collect(Collectors.toList());
 
         OrderListResponseDTO response = OrderListResponseDTO.builder()
