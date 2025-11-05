@@ -117,6 +117,247 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
             @Param("month") int month
     );
 
+    // ===== 월별 리포트 쿼리 =====
+    
+    // 월별 총 주문 건수 (취소 제외)
+    @Query("""
+        SELECT COUNT(o) 
+        FROM Order o 
+        WHERE o.orderStatus != 'CANCELLED' 
+        AND FUNCTION('YEAR', o.createdAt) = :year 
+        AND FUNCTION('MONTH', o.createdAt) = :month
+    """)
+    Long countMonthlyOrders(@Param("year") int year, @Param("month") int month);
+    
+    // 월별 총 출고 건수 (SHIPPING, PENDING_RECEIVING, RECEIVED 상태)
+    @Query("""
+        SELECT COUNT(o) 
+        FROM Order o 
+        WHERE o.orderStatus IN ('SHIPPING', 'PENDING_RECEIVING', 'RECEIVED')
+        AND FUNCTION('YEAR', o.createdAt) = :year 
+        AND FUNCTION('MONTH', o.createdAt) = :month
+    """)
+    Long countMonthlyShippedOrders(@Param("year") int year, @Param("month") int month);
+    
+    // 월별 총 주문 부품 수량 (취소 제외)
+    @Query("""
+        SELECT COALESCE(SUM(oi.amount), 0)
+        FROM Order o
+        JOIN o.orderItems oi
+        WHERE o.orderStatus != 'CANCELLED'
+        AND FUNCTION('YEAR', o.createdAt) = :year 
+        AND FUNCTION('MONTH', o.createdAt) = :month
+    """)
+    Long sumMonthlyOrderItemCount(@Param("year") int year, @Param("month") int month);
+    
+    // 월별 총 출고 부품 수량 (SHIPPING, PENDING_RECEIVING, RECEIVED 상태)
+    @Query("""
+        SELECT COALESCE(SUM(oi.amount), 0)
+        FROM Order o
+        JOIN o.orderItems oi
+        WHERE o.orderStatus IN ('SHIPPING', 'PENDING_RECEIVING', 'RECEIVED')
+        AND FUNCTION('YEAR', o.createdAt) = :year 
+        AND FUNCTION('MONTH', o.createdAt) = :month
+    """)
+    Long sumMonthlyShippedItemCount(@Param("year") int year, @Param("month") int month);
+    
+    // 월별 총 판매 수익 (매출) (취소, 반려 제외)
+    @Query("""
+        SELECT COALESCE(SUM(o.totalPrice), 0) 
+        FROM Order o 
+        WHERE o.orderStatus NOT IN ('CANCELLED', 'REJECTED', 'FAILED')
+        AND FUNCTION('YEAR', o.createdAt) = :year 
+        AND FUNCTION('MONTH', o.createdAt) = :month
+    """)
+    Long calculateMonthlyRevenue(@Param("year") int year, @Param("month") int month);
+    
+    // 월별 총 원가 (OrderItem의 cost 필드 사용)
+    @Query("""
+        SELECT COALESCE(SUM(oi.cost * oi.amount), 0)
+        FROM Order o
+        JOIN o.orderItems oi
+        WHERE o.orderStatus NOT IN ('CANCELLED', 'REJECTED', 'FAILED')
+        AND FUNCTION('YEAR', o.createdAt) = :year 
+        AND FUNCTION('MONTH', o.createdAt) = :month
+    """)
+    Long calculateMonthlyCost(@Param("year") int year, @Param("month") int month);
+    
+    // ===== 주차별 리포트 쿼리 =====
+    
+    // 특정 기간의 총 주문 건수 (취소 제외)
+    @Query("""
+        SELECT COUNT(o) 
+        FROM Order o 
+        WHERE o.orderStatus != 'CANCELLED' 
+        AND o.createdAt >= :startDate 
+        AND o.createdAt < :endDate
+    """)
+    Long countOrdersByDateRange(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+    
+    // 특정 기간의 총 출고 건수 (SHIPPING, PENDING_RECEIVING, RECEIVED 상태)
+    @Query("""
+        SELECT COUNT(o) 
+        FROM Order o 
+        WHERE o.orderStatus IN ('SHIPPING', 'PENDING_RECEIVING', 'RECEIVED')
+        AND o.createdAt >= :startDate 
+        AND o.createdAt < :endDate
+    """)
+    Long countShippedOrdersByDateRange(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+    
+    // 특정 기간의 총 판매 수익 (매출) (취소, 반려 제외)
+    @Query("""
+        SELECT COALESCE(SUM(o.totalPrice), 0) 
+        FROM Order o 
+        WHERE o.orderStatus NOT IN ('CANCELLED', 'REJECTED', 'FAILED')
+        AND o.createdAt >= :startDate 
+        AND o.createdAt < :endDate
+    """)
+    Long calculateRevenueByDateRange(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+    
+    // 특정 기간의 총 원가 (OrderItem의 cost 필드 사용)
+    @Query("""
+        SELECT COALESCE(SUM(oi.cost * oi.amount), 0)
+        FROM Order o
+        JOIN o.orderItems oi
+        WHERE o.orderStatus NOT IN ('CANCELLED', 'REJECTED', 'FAILED')
+        AND o.createdAt >= :startDate 
+        AND o.createdAt < :endDate
+    """)
+    Long calculateCostByDateRange(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+    
+    // ===== 일자별 리포트 쿼리 =====
+    
+    // 일자별 주문 건수 (취소 제외, 일자별 그룹화)
+    @Query("""
+        SELECT FUNCTION('YEAR', o.createdAt), 
+               FUNCTION('MONTH', o.createdAt), 
+               FUNCTION('DAY', o.createdAt),
+               COUNT(o)
+        FROM Order o 
+        WHERE o.orderStatus != 'CANCELLED' 
+        AND FUNCTION('YEAR', o.createdAt) = :year 
+        AND FUNCTION('MONTH', o.createdAt) = :month
+        GROUP BY FUNCTION('YEAR', o.createdAt), 
+                 FUNCTION('MONTH', o.createdAt), 
+                 FUNCTION('DAY', o.createdAt)
+        ORDER BY FUNCTION('DAY', o.createdAt)
+    """)
+    List<Object[]> countDailyOrders(@Param("year") int year, @Param("month") int month);
+    
+    // 일자별 출고 건수 (SHIPPING, PENDING_RECEIVING, RECEIVED 상태, 일자별 그룹화)
+    @Query("""
+        SELECT FUNCTION('YEAR', o.createdAt), 
+               FUNCTION('MONTH', o.createdAt), 
+               FUNCTION('DAY', o.createdAt),
+               COUNT(o)
+        FROM Order o 
+        WHERE o.orderStatus IN ('SHIPPING', 'PENDING_RECEIVING', 'RECEIVED')
+        AND FUNCTION('YEAR', o.createdAt) = :year 
+        AND FUNCTION('MONTH', o.createdAt) = :month
+        GROUP BY FUNCTION('YEAR', o.createdAt), 
+                 FUNCTION('MONTH', o.createdAt), 
+                 FUNCTION('DAY', o.createdAt)
+        ORDER BY FUNCTION('DAY', o.createdAt)
+    """)
+    List<Object[]> countDailyShippedOrders(@Param("year") int year, @Param("month") int month);
+    
+    // ===== 일자별 카테고리별 판매량 리포트 쿼리 =====
+    
+    // 일자별 카테고리별 판매량 (취소 제외, 일자별 + 카테고리별 그룹화)
+    @Query("""
+        SELECT FUNCTION('YEAR', o.createdAt), 
+               FUNCTION('MONTH', o.createdAt), 
+               FUNCTION('DAY', o.createdAt),
+               oi.categoryName,
+               SUM(oi.amount)
+        FROM Order o
+        JOIN o.orderItems oi
+        WHERE o.orderStatus != 'CANCELLED'
+        AND FUNCTION('YEAR', o.createdAt) = :year 
+        AND FUNCTION('MONTH', o.createdAt) = :month
+        GROUP BY FUNCTION('YEAR', o.createdAt), 
+                 FUNCTION('MONTH', o.createdAt), 
+                 FUNCTION('DAY', o.createdAt),
+                 oi.categoryName
+        ORDER BY FUNCTION('DAY', o.createdAt), oi.categoryName
+    """)
+    List<Object[]> getDailyCategorySales(@Param("year") int year, @Param("month") int month);
+    
+    // ===== 월별 TOP 매출량/순이익 리포트 쿼리 =====
+    
+    // 월별 TOP 10 매출량 부품 (부품별 매출액 합계 기준)
+    @Query("""
+        SELECT oi.partId,
+               oi.name,
+               oi.categoryName,
+               SUM(oi.amount) as totalQuantity,
+               oi.price as unitPrice,
+               SUM(oi.price * oi.amount) as totalRevenue,
+               SUM(oi.cost * oi.amount) as totalCost,
+               SUM((oi.price - oi.cost) * oi.amount) as netProfit
+        FROM Order o
+        JOIN o.orderItems oi
+        WHERE o.orderStatus NOT IN ('CANCELLED', 'REJECTED', 'FAILED')
+        AND FUNCTION('YEAR', o.createdAt) = :year 
+        AND FUNCTION('MONTH', o.createdAt) = :month
+        GROUP BY oi.partId, oi.name, oi.categoryName, oi.price
+        ORDER BY SUM(oi.price * oi.amount) DESC
+    """)
+    List<Object[]> getTopRevenueParts(@Param("year") int year, @Param("month") int month);
+    
+    // 월별 TOP 10 순이익 부품 (부품별 순이익 합계 기준)
+    @Query("""
+        SELECT oi.partId,
+               oi.name,
+               oi.categoryName,
+               SUM(oi.amount) as totalQuantity,
+               oi.price as unitPrice,
+               SUM(oi.price * oi.amount) as totalRevenue,
+               SUM(oi.cost * oi.amount) as totalCost,
+               SUM((oi.price - oi.cost) * oi.amount) as netProfit
+        FROM Order o
+        JOIN o.orderItems oi
+        WHERE o.orderStatus NOT IN ('CANCELLED', 'REJECTED', 'FAILED')
+        AND FUNCTION('YEAR', o.createdAt) = :year 
+        AND FUNCTION('MONTH', o.createdAt) = :month
+        GROUP BY oi.partId, oi.name, oi.categoryName, oi.price
+        ORDER BY SUM((oi.price - oi.cost) * oi.amount) DESC
+    """)
+    List<Object[]> getTopProfitParts(@Param("year") int year, @Param("month") int month);
+    
+    // ===== 월별 창고별 리포트 쿼리 =====
+    
+    // 창고별 주문 건수 (취소 제외, location의 첫 번째 문자로 창고 구분)
+    @Query("""
+        SELECT SUBSTRING(oi.location, 1, 1) as warehouse,
+               COUNT(DISTINCT o.orderId) as orderCount
+        FROM Order o
+        JOIN o.orderItems oi
+        WHERE o.orderStatus != 'CANCELLED'
+        AND oi.location IS NOT NULL
+        AND FUNCTION('YEAR', o.createdAt) = :year 
+        AND FUNCTION('MONTH', o.createdAt) = :month
+        GROUP BY SUBSTRING(oi.location, 1, 1)
+        ORDER BY SUBSTRING(oi.location, 1, 1)
+    """)
+    List<Object[]> countOrdersByWarehouse(@Param("year") int year, @Param("month") int month);
+    
+    // 창고별 출고 건수 (SHIPPING, PENDING_RECEIVING, RECEIVED 상태)
+    @Query("""
+        SELECT SUBSTRING(oi.location, 1, 1) as warehouse,
+               COUNT(DISTINCT o.orderId) as shippedCount
+        FROM Order o
+        JOIN o.orderItems oi
+        WHERE o.orderStatus IN ('SHIPPING', 'PENDING_RECEIVING', 'RECEIVED')
+        AND oi.location IS NOT NULL
+        AND FUNCTION('YEAR', o.createdAt) = :year 
+        AND FUNCTION('MONTH', o.createdAt) = :month
+        GROUP BY SUBSTRING(oi.location, 1, 1)
+        ORDER BY SUBSTRING(oi.location, 1, 1)
+    """)
+    List<Object[]> countShippedOrdersByWarehouse(@Param("year") int year, @Param("month") int month);
+           
     @EntityGraph(attributePaths = {"orderItems"})
     @Query("SELECT o FROM Order o WHERE o.orderId IN :orderIds")
-    List<Order> findWithItemsByIdIn(@Param("orderIds") List<Long> orderIds);}
+    List<Order> findWithItemsByIdIn(@Param("orderIds") List<Long> orderIds);
+}

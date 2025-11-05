@@ -13,6 +13,7 @@ public class PartDetailResponseDTO {
     private Long id;
     private String name;
     private int price;
+    private int cost;  // 원가
     private String image;
     private String trim;
     private String model;
