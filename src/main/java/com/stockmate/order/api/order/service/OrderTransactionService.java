@@ -1,5 +1,6 @@
 package com.stockmate.order.api.order.service;
 
+import com.stockmate.order.api.notification.service.ApplicationNotificationService;
 import com.stockmate.order.api.order.entity.Order;
 import com.stockmate.order.api.order.entity.OrderStatus;
 import com.stockmate.order.api.order.repository.OrderRepository;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderTransactionService {
 
     private final OrderRepository orderRepository;
+    private final ApplicationNotificationService applicationNotificationService;
 
     /**
      * 주문 상태를 PENDING_APPROVAL로 변경 (별도 트랜잭션 - REQUIRES_NEW)
@@ -41,6 +43,14 @@ public class OrderTransactionService {
         order.startApproval(approvalAttemptId);
         orderRepository.save(order);
 
+        // 알림 저장
+        applicationNotificationService.saveNotification(
+                order,
+                order.getOrderNumber(),
+                "주문이 승인 대기중입니다.",
+                order.getMemberId()
+        );
+
         log.info("주문 상태 변경 완료 (별도 트랜잭션) - Order ID: {}, Status: PENDING_APPROVAL, Attempt ID: {}", 
                 orderId, approvalAttemptId);
     }
@@ -60,6 +70,14 @@ public class OrderTransactionService {
 
         order.approve();
         orderRepository.save(order);
+
+        applicationNotificationService.saveNotification(
+                order,
+                order.getOrderNumber(),
+                "주문이 승인 완료되었습니다.",
+                order.getMemberId()
+        );
+
         log.info("주문 승인 완료 - Order ID: {}, Status: APPROVAL_ORDER", orderId);
     }
 
@@ -74,6 +92,14 @@ public class OrderTransactionService {
         if (order.getOrderStatus() == OrderStatus.PENDING_APPROVAL) {
             order.rollbackToPayCompleted();
             orderRepository.save(order);
+
+            applicationNotificationService.saveNotification(
+                    order,
+                    order.getOrderNumber(),
+                    "주문이 본사 재고 문제로 인해 결제 완료 상태로 변경되었습니다.",
+                    order.getMemberId()
+            );
+
             log.info("재고 차감 실패로 주문 상태 복원 - Order ID: {}, Status: PAY_COMPLETED", orderId);
         }
     }
@@ -92,6 +118,13 @@ public class OrderTransactionService {
         order.startReceiving(attemptId);
         orderRepository.save(order);
 
+        applicationNotificationService.saveNotification(
+                order,
+                order.getOrderNumber(),
+                "주문하신 상품이 입고 대기중입니다.",
+                order.getMemberId()
+        );
+
         log.info("주문 상태를 입고 대기로 변경 완료 - Order ID: {}, Status: {}", orderId, order.getOrderStatus());
     }
 
@@ -104,6 +137,13 @@ public class OrderTransactionService {
 
         order.rollbackToShipping();
         orderRepository.save(order);
+
+        applicationNotificationService.saveNotification(
+                order,
+                order.getOrderNumber(),
+                "상품 입고 실패로 배송 중으로 변경되었습니다.",
+                order.getMemberId()
+        );
 
         log.info("주문 상태를 배송 중으로 롤백 완료 - Order ID: {}, Status: {}", orderId, order.getOrderStatus());
     }
