@@ -1,5 +1,6 @@
 package com.stockmate.order.api.order.service;
 
+import com.stockmate.order.api.notification.service.ApplicationNotificationService;
 import com.stockmate.order.api.order.dto.*;
 import com.stockmate.order.api.order.entity.Order;
 import com.stockmate.order.api.order.entity.OrderItem;
@@ -10,7 +11,6 @@ import com.stockmate.order.api.websocket.handler.OrderWebSocketHandler;
 import com.stockmate.order.api.websocket.handler.DashboardWebSocketHandler;
 import com.stockmate.order.common.config.security.Role;
 import com.stockmate.order.common.config.security.SecurityUser;
-import com.stockmate.order.common.config.webClient.WebClientConfig;
 import com.stockmate.order.common.exception.BadRequestException;
 import com.stockmate.order.common.exception.InternalServerException;
 import com.stockmate.order.common.exception.NotFoundException;
@@ -19,7 +19,6 @@ import com.stockmate.order.common.producer.KafkaProducerService;
 import com.stockmate.order.common.response.ErrorStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +45,7 @@ public class OrderService {
     private final OrderWebSocketHandler orderWebSocketHandler;
     private final DashboardWebSocketHandler dashboardWebSocketHandler;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final ApplicationNotificationService applicationNotificationService;
 
     @Transactional
     public MakeOrderResponseDto makeOrder(OrderRequestDTO orderRequestDTO, Long memberId) {
@@ -117,6 +117,13 @@ public class OrderService {
 
         applicationEventPublisher.publishEvent(payRequestEvent);
 
+        applicationNotificationService.saveNotification(
+                savedOrder,
+                savedOrder.getOrderNumber(),
+                "새로운 주문이 생성되었습니다.",
+                savedOrder.getMemberId()
+        );
+
         // 관리자에게 새 주문 알림 전송
         try {
             dashboardWebSocketHandler.notifyAdminNewOrder(savedOrder.getOrderId(), savedOrder.getOrderNumber());
@@ -177,6 +184,14 @@ public class OrderService {
 
         order.cancel();
         orderRepository.save(order);
+
+        applicationNotificationService.saveNotification(
+                order,
+                order.getOrderNumber(),
+                "주문이 취소되었습니다.",
+                order.getMemberId()
+        );
+
 
         log.info("주문 취소 완료 - Order ID: {}, Order Number: {}, 취소자 Role: {}",
                 orderId, order.getOrderNumber(), role);
@@ -380,6 +395,13 @@ public class OrderService {
         order.registerShipping(carrier, trackingNumber);
         orderRepository.save(order);
 
+        applicationNotificationService.saveNotification(
+                order,
+                order.getOrderNumber(),
+                "주문하신 상품이 배송중입니다.",
+                order.getMemberId()
+        );
+
         log.info("배송 등록 완료 - Order Number: {}, Carrier: {}, Tracking Number: {}",
                 requestDTO.getOrderNumber(), carrier, trackingNumber);
 
@@ -430,6 +452,13 @@ public class OrderService {
         // 주문 상태를 PENDING_SHIPPING으로 변경
         order.pendingShipping();
         orderRepository.save(order);
+
+        applicationNotificationService.saveNotification(
+                order,
+                order.getOrderNumber(),
+                "상품이 출고 대기중입니다.",
+                order.getMemberId()
+        );
 
         log.info("주문 상태를 출고 대기로 변경 완료 - Order ID: {}, Status: PENDING_SHIPPING", orderId);
     }
@@ -502,6 +531,15 @@ public class OrderService {
                 // 재고 업데이트 성공 시 주문 상태를 RECEIVED로 변경
                 order.completeReceiving();
                 orderRepository.save(order);
+
+                // 알림 저장
+                applicationNotificationService.saveNotification(
+                        order,
+                        order.getOrderNumber(),
+                        "상품이 입고되었습니다.",
+                        order.getMemberId()
+                );
+
 
                 // Information 서버로 입고 히스토리 등록 API 호출
                 String message = String.format("%s 주문 입고처리 되었습니다.", order.getOrderNumber());
@@ -806,6 +844,13 @@ public class OrderService {
 
         order.reject(orderRejectRequestDTO.getReason());
         orderRepository.save(order);
+
+        applicationNotificationService.saveNotification(
+                order,
+                order.getOrderNumber(),
+                "주문이 반려되었습니다. 다시 주문해주세요.",
+                order.getMemberId()
+        );
 
         log.info("주문 반려 완료 - Order ID: {}, Order Number: {}, Status: REJECTED", orderRejectRequestDTO.getOrderId(), order.getOrderNumber());
     }
