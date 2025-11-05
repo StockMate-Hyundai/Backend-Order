@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Tag(name = "대시보드 알림 API", description = "관리자/창고관리자 알림 조회 및 관리")
+@Tag(name = "Web Notification", description = "웹 알림 관련 API 입니다.")
 @RestController
 @RequestMapping("/api/v1/order/notifications")
 @RequiredArgsConstructor

@@ -40,6 +40,12 @@ public enum SuccessStatus {
 	MARK_NOTIFICATION_READ_SUCCESS(HttpStatus.OK, "알림 읽음 처리 성공"),
 	MARK_ALL_NOTIFICATIONS_READ_SUCCESS(HttpStatus.OK, "모든 알림 읽음 처리 성공"),
 	SEND_NAVIGATION_PARTS_SUCCESS(HttpStatus.OK, "네비게이션용 부품 정보 조회 성공"),
+	GET_MONTHLY_REPORT_SUCCESS(HttpStatus.OK, "월별 리포트 조회 성공"),
+	GET_WEEKLY_REPORT_SUCCESS(HttpStatus.OK, "주차별 리포트 조회 성공"),
+	GET_DAILY_REPORT_SUCCESS(HttpStatus.OK, "일자별 리포트 조회 성공"),
+	GET_DAILY_CATEGORY_SALES_SUCCESS(HttpStatus.OK, "일자별 카테고리별 판매량 리포트 조회 성공"),
+	GET_TOP_SALES_SUCCESS(HttpStatus.OK, "월별 TOP 매출량/순이익 리포트 조회 성공"),
+	GET_WAREHOUSE_REPORT_SUCCESS(HttpStatus.OK, "월별 창고별 리포트 조회 성공"),
 
 	/**
 	 * 201

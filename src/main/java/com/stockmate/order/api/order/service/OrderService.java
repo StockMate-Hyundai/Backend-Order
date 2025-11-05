@@ -102,6 +102,8 @@ public class OrderService {
                     .categoryName(info.getCategoryName())
                     .name(info.getName())
                     .price(info.getPrice())
+                    .cost(info.getCost())  // 원가 (주문 시점)
+                    .location(info.getLocation())  // 창고 위치 (주문 시점)
                     .build();
 
             order.getOrderItems().add(orderItem);
