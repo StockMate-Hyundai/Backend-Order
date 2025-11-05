@@ -117,6 +117,6 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
             @Param("month") int month
     );
 
-    @EntityGraph(attributePaths = {"orderItems", "orderItems.part"})
+    @EntityGraph(attributePaths = {"orderItems"})
     @Query("SELECT o FROM Order o WHERE o.orderId IN :orderIds")
     List<Order> findWithItemsByIdIn(@Param("orderIds") List<Long> orderIds);}
