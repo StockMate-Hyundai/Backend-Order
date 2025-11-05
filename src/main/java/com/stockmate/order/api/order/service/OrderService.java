@@ -711,7 +711,7 @@ public class OrderService {
                             .toList();
 
                     return DepositListResponseDTO.builder()
-                            .orderId(order.getOrderNumber())
+                            .orderId(order.getOrderId())
                             .orderItems(parts)
                             .build();
                 })

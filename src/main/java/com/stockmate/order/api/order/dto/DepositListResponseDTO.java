@@ -10,6 +10,6 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class DepositListResponseDTO {
-    private String orderId;
+    private Long orderId;
     private List<DepositPartDetailDTO> orderItems;
 }

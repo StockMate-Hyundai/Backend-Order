@@ -121,8 +121,9 @@ public class OrderController {
     public ResponseEntity<ApiResponse<List<DepositListResponseDTO>>> getDepositPartDetail(
             @RequestBody List<Long> orderIds
     ) {
-        log.info("주문 상세 조회 완료 - Order ID: {}", orderIds);
+        log.info("주문 상세 조회 요청 - Order IDs: {}", orderIds);
         List<DepositListResponseDTO> response = orderService.getDepositPartDetail(orderIds);
+        log.info("주문 상세 조회 완료 - Order IDs: {}, 조회된 주문 수: {}", orderIds, response.size());
         return ApiResponse.success(SuccessStatus.SEND_ORDER_DETAIL_SUCCESS, response);
     }
 
