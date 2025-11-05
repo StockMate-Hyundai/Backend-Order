@@ -17,4 +17,6 @@ public class InventoryCheckItemResponseDTO {
     private String categoryName;
     private String name;
     private Long price;
+    private Long cost;  // 원가
+    private String location;  // 창고 위치 (예: "A3-3")
 }
