@@ -3,6 +3,8 @@ package com.stockmate.order.api.notification.entity;
 import com.stockmate.order.api.order.entity.Order;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 @Entity
 @Table(name = "app_notification")
@@ -17,6 +19,7 @@ public class ApplicationNotification {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id")
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Order orderId;
 
     private Long userId;

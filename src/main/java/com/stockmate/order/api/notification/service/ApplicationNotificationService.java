@@ -81,6 +81,7 @@ public class ApplicationNotificationService {
     }
 
     // 모든 알림 읽음 처리
+    @Transactional
     public void markAllAsRead(Long userID) {
         applicationNotificationRepository.markAllAsReadByUserId(userID);
         log.info("알림 전체 읽음 처리 완료");

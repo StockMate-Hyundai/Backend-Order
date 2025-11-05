@@ -17,7 +17,7 @@ import java.util.List;
 
 @Tag(name = "지점 알림 API", description = "지점 알림 조회 및 관리")
 @RestController
-@RequestMapping("/api/v1/order/notifications")
+@RequestMapping("/api/v1/order/store/notifications")
 @RequiredArgsConstructor
 @Slf4j
 public class ApplicationNotificationController {
@@ -53,7 +53,7 @@ public class ApplicationNotificationController {
     @Operation(summary = "알림 읽음 처리")
     @PatchMapping("/{notificationId}/read")
     public ResponseEntity<ApiResponse<Void>> markAsRead(
-            @RequestParam Long notificationId
+            @PathVariable Long notificationId
     ) {
         applicationNotificationService.markAsRead(notificationId);
         return ApiResponse.success_only(SuccessStatus.SET_UNREAD_CHANGE);
