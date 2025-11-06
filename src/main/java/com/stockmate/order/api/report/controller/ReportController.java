@@ -17,14 +17,13 @@ import com.stockmate.order.common.response.ApiResponse;
 import com.stockmate.order.common.response.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Slf4j
@@ -39,9 +38,13 @@ public class ReportController {
     @Operation(summary = "월별 리포트 조회", description = "지정된 년월의 주문/출고/매출/원가/순수익 집계 데이터를 조회합니다.")
     @GetMapping("/monthly")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<MonthlyReportResponseDTO>> getMonthlyReport(@Valid @ModelAttribute MonthlyReportRequestDTO requestDTO) {
+    public ResponseEntity<ApiResponse<MonthlyReportResponseDTO>> getMonthlyReport(@RequestParam("year") Integer year, @RequestParam("month") Integer month) {
 
-        log.info("월별 리포트 조회 요청 - 년월: {}-{}", requestDTO.getYear(), requestDTO.getMonth());
+        log.info("월별 리포트 조회 요청 - 년월: {}-{}", year, month);
+        MonthlyReportRequestDTO requestDTO = MonthlyReportRequestDTO.builder()
+                .year(year)
+                .month(month)
+                .build();
         MonthlyReportResponseDTO response = reportService.getMonthlyReport(requestDTO);
 
         log.info("월별 리포트 조회 완료 - 주문: {}건, 출고: {}건, 매출: {}원, 순수익: {}원", 
@@ -56,9 +59,13 @@ public class ReportController {
     @Operation(summary = "주차별 리포트 조회", description = "지정된 년월의 이전 월 마지막 2주차 + 해당 월 전체 4주차 = 총 7주차의 주문/출고 | 판매수익/순수익 데이터를 조회합니다.")
     @GetMapping("/weekly")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<WeeklyReportResponseDTO>> getWeeklyReport(@Valid @ModelAttribute WeeklyReportRequestDTO requestDTO) {
+    public ResponseEntity<ApiResponse<WeeklyReportResponseDTO>> getWeeklyReport(@RequestParam("year") Integer year, @RequestParam("month") Integer month) {
 
-        log.info("주차별 리포트 조회 요청 - 년월: {}-{}", requestDTO.getYear(), requestDTO.getMonth());
+        log.info("주차별 리포트 조회 요청 - 년월: {}-{}", year, month);
+        WeeklyReportRequestDTO requestDTO = WeeklyReportRequestDTO.builder()
+                .year(year)
+                .month(month)
+                .build();
         WeeklyReportResponseDTO response = reportService.getWeeklyReport(requestDTO);
 
         log.info("주차별 리포트 조회 완료 - 총 {}주차 데이터", response.getWeeks().size());
@@ -68,9 +75,13 @@ public class ReportController {
     @Operation(summary = "일자별 리포트 조회", description = "지정된 년월의 모든 일자별 주문량과 출고량을 조회합니다.")
     @GetMapping("/daily")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<DailyReportResponseDTO>> getDailyReport(@Valid @ModelAttribute DailyReportRequestDTO requestDTO) {
+    public ResponseEntity<ApiResponse<DailyReportResponseDTO>> getDailyReport(@RequestParam("year") Integer year, @RequestParam("month") Integer month) {
 
-        log.info("일자별 리포트 조회 요청 - 년월: {}-{}", requestDTO.getYear(), requestDTO.getMonth());
+        log.info("일자별 리포트 조회 요청 - 년월: {}-{}", year, month);
+        DailyReportRequestDTO requestDTO = DailyReportRequestDTO.builder()
+                .year(year)
+                .month(month)
+                .build();
         DailyReportResponseDTO response = reportService.getDailyReport(requestDTO);
 
         log.info("일자별 리포트 조회 완료 - 총 {}일 데이터", response.getDays().size());
@@ -81,11 +92,13 @@ public class ReportController {
                description = "지정된 년월의 모든 일자별 카테고리별 판매량을 조회합니다.")
     @GetMapping("/daily/category-sales")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<DailyCategorySalesResponseDTO>> getDailyCategorySales(
-            @Valid @ModelAttribute DailyCategorySalesRequestDTO requestDTO) {
+    public ResponseEntity<ApiResponse<DailyCategorySalesResponseDTO>> getDailyCategorySales(@RequestParam("year") Integer year, @RequestParam("month") Integer month) {
 
-        log.info("일자별 카테고리별 판매량 리포트 조회 요청 - 년월: {}-{}", requestDTO.getYear(), requestDTO.getMonth());
-
+        log.info("일자별 카테고리별 판매량 리포트 조회 요청 - 년월: {}-{}", year, month);
+        DailyCategorySalesRequestDTO requestDTO = DailyCategorySalesRequestDTO.builder()
+                .year(year)
+                .month(month)
+                .build();
         DailyCategorySalesResponseDTO response = reportService.getDailyCategorySales(requestDTO);
 
         log.info("일자별 카테고리별 판매량 리포트 조회 완료 - 총 {}일 데이터", response.getDays().size());
@@ -96,11 +109,13 @@ public class ReportController {
                description = "지정된 년월의 TOP 10 매출량 부품과 TOP 10 순이익 부품을 조회합니다.")
     @GetMapping("/top-sales")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<TopSalesResponseDTO>> getTopSales(
-            @Valid @ModelAttribute TopSalesRequestDTO requestDTO) {
+    public ResponseEntity<ApiResponse<TopSalesResponseDTO>> getTopSales(@RequestParam("year") Integer year, @RequestParam("month") Integer month) {
 
-        log.info("월별 TOP 매출량/순이익 리포트 조회 요청 - 년월: {}-{}", requestDTO.getYear(), requestDTO.getMonth());
-
+        log.info("월별 TOP 매출량/순이익 리포트 조회 요청 - 년월: {}-{}", year, month);
+        TopSalesRequestDTO requestDTO = TopSalesRequestDTO.builder()
+                .year(year)
+                .month(month)
+                .build();
         TopSalesResponseDTO response = reportService.getTopSales(requestDTO);
 
         log.info("월별 TOP 매출량/순이익 리포트 조회 완료 - TOP 매출량: {}개, TOP 순이익: {}개", 
@@ -112,11 +127,13 @@ public class ReportController {
                description = "지정된 년월의 창고별(A, B, C, D, E) 총 주문수, 총 출고수, 주문수 비율(%)을 조회합니다.")
     @GetMapping("/warehouse")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<WarehouseReportResponseDTO>> getWarehouseReport(
-            @Valid @ModelAttribute WarehouseReportRequestDTO requestDTO) {
+    public ResponseEntity<ApiResponse<WarehouseReportResponseDTO>> getWarehouseReport(@RequestParam("year") Integer year, @RequestParam("month") Integer month) {
 
-        log.info("월별 창고별 리포트 조회 요청 - 년월: {}-{}", requestDTO.getYear(), requestDTO.getMonth());
-
+        log.info("월별 창고별 리포트 조회 요청 - 년월: {}-{}", year, month);
+        WarehouseReportRequestDTO requestDTO = WarehouseReportRequestDTO.builder()
+                .year(year)
+                .month(month)
+                .build();
         WarehouseReportResponseDTO response = reportService.getWarehouseReport(requestDTO);
 
         log.info("월별 창고별 리포트 조회 완료 - 창고 수: {}개", response.getWarehouses().size());
