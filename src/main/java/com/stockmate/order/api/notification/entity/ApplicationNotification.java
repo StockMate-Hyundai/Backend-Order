@@ -1,6 +1,7 @@
 package com.stockmate.order.api.notification.entity;
 
 import com.stockmate.order.api.order.entity.Order;
+import com.stockmate.order.common.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.OnDelete;
@@ -12,7 +13,7 @@ import org.hibernate.annotations.OnDeleteAction;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
-public class ApplicationNotification {
+public class ApplicationNotification extends BaseTimeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

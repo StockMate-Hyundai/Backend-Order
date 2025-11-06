@@ -11,13 +11,13 @@ import java.util.List;
 
 public interface ApplicationNotificationRepository extends JpaRepository<ApplicationNotification, Long> {
     // 알림 조회
-    List<ApplicationNotification> findByUserId(Long userId);
+    List<ApplicationNotification> findByUserIdOrderByCreatedAtDesc(Long userId);
 
     // 읽지 않은 알림 갯수
     Long countByUserIdAndIsReadFalse(Long userId);
 
     // 읽지 않은 알림 조회
-    List<ApplicationNotification> findByUserIdAndIsReadFalse(Long userId);
+    List<ApplicationNotification> findByUserIdAndIsReadFalseOrderByCreatedAtDesc(Long userId);
 
     // 모든 알림을 읽음 처리 (Bulk Update)
     @Modifying
@@ -26,6 +26,7 @@ public interface ApplicationNotificationRepository extends JpaRepository<Applica
         SET a.isRead = true
         WHERE a.userId = :userId
           AND a.isRead = false
+        ORDER BY a.createdAt
     """)
     void markAllAsReadByUserId(@Param("userId") Long userId);
 }
