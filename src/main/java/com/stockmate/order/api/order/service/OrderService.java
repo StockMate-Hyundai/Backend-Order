@@ -293,7 +293,7 @@ public class OrderService {
         log.info("외부 서버 호출 완료 - 조회된 사용자: {}, 조회된 부품: {}", userMap.size(), partMap.size());
 
         List<OrderDetailResponseDTO> content = orderPage.getContent().stream()
-                .map(order -> toOrderDetailResponseDTO(order, partMap))
+                .map(order -> toOrderDetailResponseDTO(order, userMap, partMap))
                 .collect(Collectors.toList());
 
         OrderListResponseDTO response = OrderListResponseDTO.builder()
@@ -335,7 +335,7 @@ public class OrderService {
 
     private OrderDetailResponseDTO toOrderDetailResponseDTO(
             Order order,
-//            Map<Long, UserBatchResponseDTO> userMap,
+            Map<Long, UserBatchResponseDTO> userMap,
             Map<Long, PartDetailResponseDTO> partMap) {
 
         List<OrderItemDetailDTO> orderItemDetails = order.getOrderItems().stream()
@@ -350,7 +350,7 @@ public class OrderService {
                 .orderId(order.getOrderId())
                 .orderNumber(order.getOrderNumber())
                 .memberId(order.getMemberId())
-//                .userInfo(userMap.get(order.getMemberId()))
+                .userInfo(userMap.get(order.getMemberId()))
                 .orderItems(orderItemDetails)
                 .paymentType(order.getPaymentType())
                 .etc(order.getEtc())
@@ -713,7 +713,7 @@ public class OrderService {
 
         log.info("주문 상세 조회 완료 - Order ID: {}, Order Number: {}", orderId, order.getOrderNumber());
 
-        return toOrderDetailResponseDTO(order, partMap);
+        return toOrderDetailResponseDTO(order, userMap, partMap);
     }
 
     @Transactional(readOnly = true)
@@ -800,10 +800,10 @@ public class OrderService {
         Map<Long, UserBatchResponseDTO> userMap = userService.getUsersByMemberIds(List.of(memberId));
         Map<Long, PartDetailResponseDTO> partMap = inventoryService.getPartDetails(new ArrayList<>(partIds));
 
-        log.info("외부 서버 호출 완료 - 조회된 부품: {}", partMap.size());
+        log.info("외부 서버 호출 완료 - 조회된 사용자: {}, 조회된 부품: {}", userMap.size(), partMap.size());
 
         List<OrderDetailResponseDTO> content = orderPage.getContent().stream()
-                .map(order -> toOrderDetailResponseDTO(order, partMap))
+                .map(order -> toOrderDetailResponseDTO(order, userMap, partMap))
                 .collect(Collectors.toList());
 
         OrderListResponseDTO response = OrderListResponseDTO.builder()
