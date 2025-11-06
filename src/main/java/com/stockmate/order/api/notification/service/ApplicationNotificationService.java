@@ -1,5 +1,6 @@
 package com.stockmate.order.api.notification.service;
 
+import com.stockmate.order.api.notification.dto.ApplicationNotificationResponseDTO;
 import com.stockmate.order.api.notification.entity.ApplicationNotification;
 import com.stockmate.order.api.notification.entity.DashboardNotification;
 import com.stockmate.order.api.notification.entity.NotificationType;
@@ -41,21 +42,29 @@ public class ApplicationNotificationService {
     }
 
     // 알림 조회
-    public List<ApplicationNotification> getNotification(Long userId) {
+    public List<ApplicationNotificationResponseDTO> getNotification(Long userId) {
         log.info("[Notification][GET] 요청 - userId={}", userId);
         List<ApplicationNotification> data = applicationNotificationRepository.findByUserId(userId);
 
+        List<ApplicationNotificationResponseDTO> result = data.stream()
+                .map(ApplicationNotificationResponseDTO::of)
+                .toList();
+
         log.info("[Notification][GET] 조회결과 - count={}", data.size());
-        return data;
+        return result;
     }
 
     // 읽지 않은 알림 조회
-    public List<ApplicationNotification> getUnreadNotifications(Long userId) {
+    public List<ApplicationNotificationResponseDTO> getUnreadNotifications(Long userId) {
         log.info("[Notification][GET-UNREAD] 요청 - userId={}", userId);
         List<ApplicationNotification> data = applicationNotificationRepository.findByUserIdAndIsReadFalse(userId);
 
+        List<ApplicationNotificationResponseDTO> result = data.stream()
+                        .map(ApplicationNotificationResponseDTO::of)
+                        .toList();
+
         log.info("[Notification][GET-UNREAD] 조회결과 - count={}", data.size());
-        return data;
+        return result;
     }
 
     // 읽지 않은 알림 개수 조회

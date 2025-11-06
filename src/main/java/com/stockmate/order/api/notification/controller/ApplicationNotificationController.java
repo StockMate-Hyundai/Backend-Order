@@ -1,5 +1,6 @@
 package com.stockmate.order.api.notification.controller;
 
+import com.stockmate.order.api.notification.dto.ApplicationNotificationResponseDTO;
 import com.stockmate.order.api.notification.entity.ApplicationNotification;
 import com.stockmate.order.api.notification.service.ApplicationNotificationService;
 import com.stockmate.order.common.config.security.SecurityUser;
@@ -25,19 +26,19 @@ public class ApplicationNotificationController {
 
     @Operation(summary = "알림 전체 조회")
     @GetMapping("/")
-    public ResponseEntity<ApiResponse<List<ApplicationNotification>>> getNotifications(
+    public ResponseEntity<ApiResponse<List<ApplicationNotificationResponseDTO>>> getNotifications(
             @AuthenticationPrincipal SecurityUser securityUser
     ) {
-        List<ApplicationNotification> response = applicationNotificationService.getNotification(securityUser.getMemberId());
+        List<ApplicationNotificationResponseDTO> response = applicationNotificationService.getNotification(securityUser.getMemberId());
         return ApiResponse.success(SuccessStatus.GET_ALL_STORE_NOTIFICATION, response);
     }
 
     @Operation(summary = "읽지 않은 알림 조회")
     @GetMapping("/unread")
-    public ResponseEntity<ApiResponse<List<ApplicationNotification>>> getUnread(
+    public ResponseEntity<ApiResponse<List<ApplicationNotificationResponseDTO>>> getUnread(
             @AuthenticationPrincipal SecurityUser securityUser
     ) {
-        List<ApplicationNotification> response = applicationNotificationService.getUnreadNotifications(securityUser.getMemberId());
+        List<ApplicationNotificationResponseDTO> response = applicationNotificationService.getUnreadNotifications(securityUser.getMemberId());
         return ApiResponse.success(SuccessStatus.GET_UNREAD_STORE_NOTIFICATION, response);
     }
 
