@@ -13,12 +13,12 @@ public class ApplicationNotificationResponseDTO {
     private Long orderId;
     private String orderNumber;
     private String message;
-    private Boolean isRead;
+    private boolean isRead;
 
     public static ApplicationNotificationResponseDTO of (ApplicationNotification a) {
         return ApplicationNotificationResponseDTO.builder()
                 .id(a.getId())
-                .orderId(a.getOrderId().getOrderId())
+                .orderId(a.getOrderId() != null ? a.getOrderId().getOrderId() : null)
                 .orderNumber(a.getOrderNumber())
                 .message(a.getMessage())
                 .isRead(a.getIsRead())
