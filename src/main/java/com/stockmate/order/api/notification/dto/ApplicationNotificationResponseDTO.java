@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.time.LocalDateTime;
+
 @Getter
 @AllArgsConstructor
 @Builder
@@ -13,6 +15,7 @@ public class ApplicationNotificationResponseDTO {
     private Long orderId;
     private String orderNumber;
     private String message;
+    private LocalDateTime createdAt;
     private boolean isRead;
 
     public static ApplicationNotificationResponseDTO of (ApplicationNotification a) {
@@ -21,6 +24,7 @@ public class ApplicationNotificationResponseDTO {
                 .orderId(a.getOrderId() != null ? a.getOrderId().getOrderId() : null)
                 .orderNumber(a.getOrderNumber())
                 .message(a.getMessage())
+                .createdAt(a.getCreatedAt())
                 .isRead(a.getIsRead())
                 .build();
     }
