@@ -26,7 +26,6 @@ public interface ApplicationNotificationRepository extends JpaRepository<Applica
         SET a.isRead = true
         WHERE a.userId = :userId
           AND a.isRead = false
-        ORDER BY a.createdAt
     """)
     void markAllAsReadByUserId(@Param("userId") Long userId);
 }
