@@ -44,7 +44,7 @@ public class ApplicationNotificationService {
     // 알림 조회
     public List<ApplicationNotificationResponseDTO> getNotification(Long userId) {
         log.info("[Notification][GET] 요청 - userId={}", userId);
-        List<ApplicationNotification> data = applicationNotificationRepository.findByUserId(userId);
+        List<ApplicationNotification> data = applicationNotificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
 
         List<ApplicationNotificationResponseDTO> result = data.stream()
                 .map(ApplicationNotificationResponseDTO::of)
@@ -57,7 +57,7 @@ public class ApplicationNotificationService {
     // 읽지 않은 알림 조회
     public List<ApplicationNotificationResponseDTO> getUnreadNotifications(Long userId) {
         log.info("[Notification][GET-UNREAD] 요청 - userId={}", userId);
-        List<ApplicationNotification> data = applicationNotificationRepository.findByUserIdAndIsReadFalse(userId);
+        List<ApplicationNotification> data = applicationNotificationRepository.findByUserIdAndIsReadFalseOrderByCreatedAtDesc(userId);
 
         List<ApplicationNotificationResponseDTO> result = data.stream()
                         .map(ApplicationNotificationResponseDTO::of)
