@@ -104,6 +104,7 @@ public class OrderService {
                     .price(info.getPrice())
                     .cost(info.getCost())  // 원가 (주문 시점)
                     .location(info.getLocation())  // 창고 위치 (주문 시점)
+                    .weight(info.getWeight())
                     .build();
 
             order.getOrderItems().add(orderItem);
@@ -1036,25 +1037,26 @@ public class OrderService {
         Map<Long, PartDetailResponseDTO> partDetailMap = inventoryService.getPartDetails(new ArrayList<>(partIds));
 
         // 응답 DTO 생성
-        List<NavigationPartsResponseDTO.PartLocationInfo> partLocations = new ArrayList<>();
+        List<NavigationPartsResponseDTO.PartInformation> partInformations = new ArrayList<>();
         for (Order order : orders) {
             for (OrderItem item : order.getOrderItems()) {
                 PartDetailResponseDTO partDetail = partDetailMap.get(item.getPartId());
                 if (partDetail != null && partDetail.getLocation() != null) {
-                    partLocations.add(NavigationPartsResponseDTO.PartLocationInfo.builder()
+                    partInformations.add(NavigationPartsResponseDTO.PartInformation.builder()
                             .partId(item.getPartId())
                             .partName(item.getName())
                             .location(partDetail.getLocation())
                             .orderNumber(order.getOrderNumber())
                             .quantity(item.getAmount())
+                            .weight(item.getWeight())
                             .build());
                 }
             }
         }
 
-        log.info("네비게이션용 부품 정보 조회 완료 - 총 부품 위치 수: {}", partLocations.size());
+        log.info("네비게이션용 부품 정보 조회 완료 - 총 부품 위치 수: {}", partInformations.size());
         return NavigationPartsResponseDTO.builder()
-                .partLocations(partLocations)
+                .partLocations(partInformations)
                 .build();
     }
 
