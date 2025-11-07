@@ -16,14 +16,17 @@ import java.util.List;
 public class NavigationPartsResponseDTO {
     
     @Schema(description = "부품 위치 리스트")
-    private List<PartLocationInfo> partLocations;
+    private List<PartInformation> partLocations;
+
+    @Schema(description = "부품 무게 리스트")
+    private List<PartInformation> partWeights;
     
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
     @Schema(description = "부품 위치 정보")
-    public static class PartLocationInfo {
+    public static class PartInformation {
         @Schema(description = "부품 ID", example = "1")
         private Long partId;
         
@@ -32,6 +35,9 @@ public class NavigationPartsResponseDTO {
         
         @Schema(description = "부품 위치", example = "A5-2")
         private String location;
+
+        @Schema(description = "부품 무게", example = "1.5")
+        private Double weight;
         
         @Schema(description = "주문 번호", example = "SMO-1")
         private String orderNumber;

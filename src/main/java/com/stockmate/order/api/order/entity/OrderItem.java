@@ -30,4 +30,5 @@ public class OrderItem {
     private Long price; // 판매가 (주문 시점)
     private Long cost;  // 원가 (주문 시점)
     private String location; // 창고 위치 (예: "A3-3")
+    private Double weight;
 }
