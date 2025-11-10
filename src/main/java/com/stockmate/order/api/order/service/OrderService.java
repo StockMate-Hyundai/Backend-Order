@@ -46,6 +46,7 @@ public class OrderService {
     private final DashboardWebSocketHandler dashboardWebSocketHandler;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final ApplicationNotificationService applicationNotificationService;
+    private final PaymentService paymentService;
 
     @Transactional
     public MakeOrderResponseDto makeOrder(OrderRequestDTO orderRequestDTO, Long memberId) {
@@ -141,6 +142,8 @@ public class OrderService {
         return MakeOrderResponseDto.of(savedOrder);
     }
 
+
+    // 주문 취소
     @Transactional
     public void cancelOrder(Long orderId, Long memberId, Role role) {
         log.info("주문 취소 요청 - Order ID: {}, Member ID: {}, Role: {}", orderId, memberId, role);
@@ -163,27 +166,65 @@ public class OrderService {
             throw new BadRequestException(ErrorStatus.ALREADY_CANCELLED_ORDER_EXCEPTION.getMessage());
         }
 
-        if (!isAdmin && (order.getOrderStatus() == OrderStatus.SHIPPING ||
-                order.getOrderStatus() == OrderStatus.DELIVERED ||
-                order.getOrderStatus() == OrderStatus.RECEIVED)) {
+        if (!isAdmin && (
+                order.getOrderStatus() == OrderStatus.PENDING_SHIPPING ||
+                        order.getOrderStatus() == OrderStatus.SHIPPING ||
+                        order.getOrderStatus() == OrderStatus.PENDING_RECEIVING ||
+                        order.getOrderStatus() == OrderStatus.DELIVERED ||
+                        order.getOrderStatus() == OrderStatus.RECEIVED ||
+                        order.getOrderStatus() == OrderStatus.REFUNDED ||
+                        order.getOrderStatus() == OrderStatus.REFUND_REJECTED
+        )
+        ) {
             log.warn("취소 불가능한 상태 - Order ID: {}, Status: {}", orderId, order.getOrderStatus());
             throw new BadRequestException(ErrorStatus.ALREADY_SHIPPED_OR_DELIVERED_ORDER_EXCEPTION.getMessage());
         }
 
-        CancelRequestEvent cancelRequestEvent = CancelRequestEvent.of(order, memberId);
+        PayCancelResponseEvent response;
 
         try {
-            kafkaProducerService.sendCancelRequest(cancelRequestEvent);
-            log.info("결제 취소 요청 이벤트 발송 완료 - Order ID: {}, 금액: {}",
-                    order.getOrderId(), order.getTotalPrice());
+            // ✅ WebClient 기반 결제 취소 호출
+            response = paymentService.requestDepositPayCancel(PayCancelRequestEvent.of(order, memberId));
+
+            log.info("결제 취소 요청 완료 - Order ID: {}, 응답: {}",
+                    order.getOrderId(), response != null ? response : "응답없음");
+
         } catch (Exception e) {
-            log.error("결제 취소 요청 이벤트 발송 실패 - Order ID: {}", order.getOrderId(), e);
-            Order failedOrder = order.toBuilder().orderStatus(OrderStatus.FAILED).build();
-            orderRepository.save(failedOrder);
+            log.error("❌ 결제 취소 요청 실패 - Order ID: {}, error={}",
+                    order.getOrderId(), e.getMessage(), e);
+
+            order.setOrderStatus(OrderStatus.FAILED);
+            order.setEtc("결제 취소 요청 실패: " + e.getMessage());
+            orderRepository.save(order);
+
             throw new BadRequestException("결제 취소 요청 처리 중 오류가 발생했습니다.");
         }
 
-        order.cancel();
+
+        // ✅ 응답 null → Payment 서버 통신 실패
+        if (response == null) {
+            log.warn("❌ 결제 취소 응답 없음 - Order ID: {}", order.getOrderId());
+
+            order.setOrderStatus(OrderStatus.FAILED);
+            order.setEtc("결제 취소 응답 없음");
+            orderRepository.save(order);
+
+            throw new BadRequestException("결제 취소 요청 처리 중 오류가 발생했습니다.");
+        }
+
+        // ✅ 결제 취소 실패
+        if (!Boolean.TRUE.equals(response.getIsSuccess())) {
+            log.warn("❌ 결제 취소 실패 - Order ID: {}, reason: {}", order.getOrderId(), response.getMessage());
+
+            order.setOrderStatus(OrderStatus.FAILED);
+            order.setEtc(response.getMessage());
+            orderRepository.save(order);
+
+            throw new BadRequestException("결제 취소 실패: " + response.getMessage());
+        }
+
+        // ✅ 결제 취소 성공 → 주문 상태 종료
+        order.cancel();   // ← 내부 상태 CANCELLED 로
         orderRepository.save(order);
 
         applicationNotificationService.saveNotification(
@@ -193,8 +234,7 @@ public class OrderService {
                 order.getMemberId()
         );
 
-
-        log.info("주문 취소 완료 - Order ID: {}, Order Number: {}, 취소자 Role: {}",
+        log.info("✅ 주문 취소 완료 - Order ID: {}, Order Number: {}, 취소자 Role: {}",
                 orderId, order.getOrderNumber(), role);
     }
 
@@ -826,26 +866,73 @@ public class OrderService {
     public void requestOrderReject(OrderRejectRequestDTO orderRejectRequestDTO, Role role) {
         log.info("주문 반려 요청 - Order ID: {}, Role: {}", orderRejectRequestDTO.getOrderId(), role);
 
+        // ✅ 권한 체크
         if (role != Role.ADMIN && role != Role.SUPER_ADMIN) {
             log.error("권한 부족 - Role: {}", role);
             throw new BadRequestException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
         }
 
+        // ✅ 주문 조회
         Order order = orderRepository.findById(orderRejectRequestDTO.getOrderId())
                 .orElseThrow(() -> {
                     log.error("주문을 찾을 수 없음 - Order ID: {}", orderRejectRequestDTO.getOrderId());
                     return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());
                 });
 
-        // TODO: 상태 변경 적용하기
+        // ✅ 상태 검증 — 결제 완료 상태만 반려 가능
         if (order.getOrderStatus() != OrderStatus.PAY_COMPLETED) {
-            log.warn("승인 불가능한 상태 - Order ID: {}, Status: {}", orderRejectRequestDTO.getOrderId(), order.getOrderStatus());
+            log.warn("반려 불가능한 상태 - Order ID: {}, Status: {}", orderRejectRequestDTO.getOrderId(), order.getOrderStatus());
             throw new BadRequestException(ErrorStatus.INVALID_ORDER_STATUS_FOR_APPROVAL.getMessage());
         }
 
+
+        // ✅ 결제 취소 요청
+        PayCancelRequestEvent cancelRequestEvent = PayCancelRequestEvent.of(order, order.getMemberId());
+        PayCancelResponseEvent cancelResponse;
+
+        try {
+            cancelResponse = paymentService.requestDepositPayCancel(cancelRequestEvent);
+            log.info("결제 취소 요청 완료 - Order ID: {}, 응답: {}",
+                    order.getOrderId(), cancelResponse != null ? cancelResponse : "응답 없음");
+        } catch (Exception e) {
+            log.error("❌ 결제 취소 요청 실패 - Order ID: {}, error={}",
+                    order.getOrderId(), e.getMessage(), e);
+
+            order.setOrderStatus(OrderStatus.FAILED);
+            order.setEtc("결제 취소 요청 실패: " + e.getMessage());
+            orderRepository.save(order);
+
+            throw new BadRequestException("결제 취소 요청 중 오류가 발생했습니다.");
+        }
+
+        // ✅ 응답 없음 → 실패 처리
+        if (cancelResponse == null) {
+            log.warn("❌ 결제 취소 응답 없음 - Order ID: {}", order.getOrderId());
+
+            order.setOrderStatus(OrderStatus.FAILED);
+            order.setEtc("결제 취소 응답 없음");
+            orderRepository.save(order);
+
+            throw new BadRequestException("결제 취소 요청 중 오류가 발생했습니다.");
+        }
+
+        // ✅ 결제 취소 실패
+        if (!Boolean.TRUE.equals(cancelResponse.getIsSuccess())) {
+            log.warn("❌ 결제 취소 실패 - Order ID: {}, reason: {}", order.getOrderId(), cancelResponse.getMessage());
+
+            order.setOrderStatus(OrderStatus.FAILED);
+            order.setEtc(cancelResponse.getMessage());
+            orderRepository.save(order);
+
+            throw new BadRequestException("결제 취소 실패: " + cancelResponse.getMessage());
+        }
+
+
+        // ✅ 결제 취소 성공 → 주문 상태 REJECTED
         order.reject(orderRejectRequestDTO.getReason());
         orderRepository.save(order);
 
+        // ✅ 알림 발송
         applicationNotificationService.saveNotification(
                 order,
                 order.getOrderNumber(),
@@ -853,7 +940,8 @@ public class OrderService {
                 order.getMemberId()
         );
 
-        log.info("주문 반려 완료 - Order ID: {}, Order Number: {}, Status: REJECTED", orderRejectRequestDTO.getOrderId(), order.getOrderNumber());
+        log.info("✅ 주문 반려 완료 - Order ID: {}, Order Number: {}, Status: REJECTED",
+                orderRejectRequestDTO.getOrderId(), order.getOrderNumber());
     }
 
 
