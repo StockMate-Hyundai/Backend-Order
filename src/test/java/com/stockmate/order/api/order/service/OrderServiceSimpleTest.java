@@ -159,7 +159,7 @@ class OrderServiceSimpleTest {
 
         // then
         verify(orderRepository, times(1)).findById(orderId);
-        verify(kafkaProducerService, times(1)).sendCancelRequest(any(CancelRequestEvent.class));
+        verify(kafkaProducerService, times(1)).sendCancelRequest(any(PayCancelRequestEvent.class));
     }
 
     @Test
