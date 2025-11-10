@@ -46,7 +46,7 @@ public class KafkaProducerService {
     }
 
     // 결체 취소 요청 이벤트 발송
-    public void sendCancelRequest(CancelRequestEvent event) {
+    public void sendCancelRequest(PayCancelRequestEvent event) {
         CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(
                 cancelRequestTopic,
                 event.getOrderId().toString(),
