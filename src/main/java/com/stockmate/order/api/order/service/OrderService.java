@@ -738,7 +738,7 @@ public class OrderService {
                     log.error("주문을 찾을 수 없음 - Order ID: {}", orderId);
                     return new NotFoundException(ErrorStatus.ORDER_NOT_FOUND_EXCEPTION.getMessage());});
 
-        boolean isAdmin = role == Role.ADMIN || role == Role.SUPER_ADMIN;
+        boolean isAdmin = role == Role.ADMIN || role == Role.SUPER_ADMIN || role == Role.WAREHOUSE;
         if (!isAdmin && !order.getMemberId().equals(memberId)) {
             log.error("권한 없음 - Order의 Member ID: {}, 요청자 Member ID: {}, Role: {}", order.getMemberId(), memberId, role);
             throw new BadRequestException(ErrorStatus.INVALID_ROLE_EXCEPTION.getMessage());
